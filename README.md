@@ -1,1 +1,1 @@
-# PolarFire SoC (MPFS) Memory Aperature/Seg Register configurator
+# PolarFire SoC (MPFS) Memory Aperature/Seg Register Configurator
