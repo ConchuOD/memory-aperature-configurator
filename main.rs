@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT or GPL-2.0
 
 #![allow(unused_variables)]
+#![allow(dead_code)]
+use text_io::read;
 
 trait Aperture {
 	fn get_hw_start_addr(&self) -> u64;
 	fn get_hw_end_addr(&self, total_system_memory: u64) -> u64;
-	fn update_hw_start_addr(&mut self, total_system_memory: u64, new_start_addr: u64);
+	fn set_hw_start_addr(&mut self, total_system_memory: u64, new_start_addr: u64);
 }
 
 struct MemoryAperture {
@@ -35,7 +37,7 @@ impl Aperture for MemoryAperture {
 		}
 	}
 
-	fn update_hw_start_addr(&mut self, total_system_memory: u64, new_start_addr: u64) {
+	fn set_hw_start_addr(&mut self, total_system_memory: u64, new_start_addr: u64) {
 		if new_start_addr < total_system_memory {
 			self.hardware_addr = new_start_addr;
 		}
@@ -44,9 +46,31 @@ impl Aperture for MemoryAperture {
 	}
 }
 
+trait SoC {
+	fn get_hw_start_addr_by_id(&self, id: usize) -> u64;
+	fn get_hw_end_addr_by_id(&self, id: usize) -> u64;
+	fn set_hw_start_addr_by_id(&mut self, new_start_addr: u64, id: usize);
+}
+
 struct MPFS {
 	total_system_memory: u64,
-	memory_apertures: Vec<MemoryAperture>
+	memory_apertures: Vec<MemoryAperture>,
+	current_aperture_id: Option<usize>
+}
+
+impl SoC for MPFS {
+
+	fn get_hw_start_addr_by_id(&self, id: usize) -> u64 {
+		self.memory_apertures[id].get_hw_start_addr()
+	}
+
+	fn get_hw_end_addr_by_id(&self, id: usize) -> u64 {
+		self.memory_apertures[id].get_hw_end_addr(self.total_system_memory)
+	}
+
+	fn set_hw_start_addr_by_id(&mut self, new_start_addr: u64, id: usize) {
+		self.memory_apertures[id].set_hw_start_addr(self.total_system_memory, new_start_addr)
+	}
 }
 
 impl Default for MPFS {
@@ -96,7 +120,8 @@ impl Default for MPFS {
 					hardware_addr: 0x0,
 					aperture_size: 0x1000_0000,
 				}
-			]
+			],
+			current_aperture_id: None
 		}
 	}
 }
@@ -138,9 +163,9 @@ fn hex_to_mib(hex: u64) -> u64
 	hex / (2_u64.pow(10).pow(2))
 }
 
-fn format_segs(memory_apertures: Vec<MemoryAperture>)
+fn display_segs(memory_apertures: &Vec<MemoryAperture>)
 {
-	print!("{{ ");
+	print!("For insertion into config.yaml:\nseg-reg-config: {{ ");
 	for memory_aperture in memory_apertures {
 		print!("{}: {:#x?}, ",
 		       memory_aperture.reg_name,
@@ -150,11 +175,9 @@ fn format_segs(memory_apertures: Vec<MemoryAperture>)
 	print!("}}\n");
 }
 
-fn main() {
-	let mut board = MPFS::default();
-	board.total_system_memory = 0x8000_0000;
-	println!("Default Memory Aperatures\n");
-	println!("Description | bus address | aperture hw start | aperture hw end | aperature size\n");
+fn display_status(board: &mut MPFS)
+{
+	println!("Description | bus address | aperture hw start | aperture hw end | aperature size");
 	for memory_aperture in &board.memory_apertures {
 		println!("| {}\t | {:#012x?} | {:#012x?} | {:#012x?} | {} MiB",
 			 memory_aperture.description,
@@ -165,7 +188,126 @@ fn main() {
 			 	    - memory_aperture.get_hw_start_addr())
 		);
 	}
-	format_segs(board.memory_apertures);
-	println!("{:#012x?}\n", seg_to_hw_start_addr(0x7002, 0x10_0000_0000));
-	println!("{:#012x?}\n", hw_start_addr_to_seg(seg_to_hw_start_addr(0x7002, 0x10_0000_0000), 0x10_0000_0000));
+	display_segs(&board.memory_apertures)
+}
+
+#[derive(Copy, Clone)]
+struct State {
+	state_id: States,
+	previous_state_id: States
+}
+
+#[derive(Copy, Clone)]
+#[derive(PartialEq)]
+enum States {
+	Init,
+	SelectAperature,
+	WaitForInput,
+	SelectOperation,
+	Exit
+}
+
+fn init_handler(current_state: State, board: &mut MPFS) -> State
+{
+	board.total_system_memory = 0x8000_0000;
+	println!("Default Memory Aperatures:");
+	display_status(board);
+	print!("\n\nEnter total system memory in hex:\n");
+	return State {state_id: States::WaitForInput, previous_state_id: current_state.state_id}
+}
+
+fn select_aperature_handler(current_state: State, board: &mut MPFS) -> State
+{	
+	if current_state.previous_state_id != States::Init {
+		display_status(board);
+	}
+
+	let aperature_iter = board.memory_apertures.iter();
+	print!("\n\nPress to edit: \n");
+	for (i, memory_aperture) in aperature_iter.enumerate() {
+		println!("{}: {}",
+		       i,
+		       memory_aperture.description
+		);
+	}
+	return State {state_id: States::WaitForInput, previous_state_id: current_state.state_id}
+}
+
+fn wait_for_input_handler(current_state: State, board: &mut MPFS) -> State
+{	
+	if current_state.previous_state_id == States::Init {
+		let total_system_memory_raw: String = read!("{}");
+		let total_system_memory = total_system_memory_raw.trim_start_matches("0x");
+		board.total_system_memory = u64::from_str_radix(total_system_memory, 16).unwrap();
+
+		return State {state_id: States::SelectAperature, previous_state_id: current_state.state_id}
+	}
+
+	if current_state.previous_state_id == States::SelectAperature {
+		let aperature_id: u64 = read!();
+		if aperature_id as usize >= board.memory_apertures.len() {
+		//invalid aperature
+			return State {state_id: States::SelectAperature, previous_state_id: current_state.state_id}
+		}
+		
+		board.current_aperture_id = Some(aperature_id as usize);
+		return State {state_id: States::SelectOperation, previous_state_id: current_state.state_id}
+	}
+
+	if current_state.previous_state_id == States::SelectOperation {
+		let hw_start_addr_raw: String = read!("{}");
+		let hw_start_addr = hw_start_addr_raw.trim_start_matches("0x");
+		board.set_hw_start_addr_by_id(u64::from_str_radix(hw_start_addr, 16).unwrap(), board.current_aperture_id.unwrap());
+	
+		return State {state_id: States::SelectAperature, previous_state_id: current_state.state_id}
+	}
+
+	return State {state_id: States::Exit, previous_state_id: current_state.state_id}
+}
+
+fn select_operation_handler(current_state: State, board: &mut MPFS) -> State
+{	
+	display_status(board);
+	print!("\nSet hardware start address: \n");
+
+	return State {state_id: States::WaitForInput, previous_state_id: current_state.state_id}
+}
+
+fn exit_handler(current_state: State, board: &mut MPFS) -> State
+{
+	print!("{{ ");
+	for memory_aperture in &board.memory_apertures {
+		print!("{}: {:#x?}, ",
+		       memory_aperture.reg_name,
+		       hw_start_addr_to_seg(memory_aperture.hardware_addr, memory_aperture.bus_addr)
+		);
+	}
+	print!("}}\n");
+	std::process::exit(0)
+}
+
+const STATE_HANDLERS: [fn(State, &mut MPFS) -> State; 5] = [
+	init_handler,
+	select_aperature_handler,
+	wait_for_input_handler,
+	select_operation_handler,
+	exit_handler
+];
+
+fn get_next_state(current_state: State, board: &mut MPFS) -> State 
+{
+	let next_state = STATE_HANDLERS[current_state.state_id as usize](current_state, board);
+	return next_state
+}
+
+fn main() {
+	let mut next_state = State {
+		state_id: States::Init,
+		previous_state_id: States::Exit
+	};
+
+	let mut board = MPFS::default();
+	loop {
+		next_state = get_next_state(next_state, &mut board);
+	}
 }
