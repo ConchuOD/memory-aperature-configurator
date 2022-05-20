@@ -6,203 +6,28 @@
 #![allow(clippy::needless_return)]
 
 use text_io::read;
-use std::error::Error;
-use std::fmt;
-
-#[derive(Debug)]
-struct SegError {
-}
-
-impl fmt::Display for SegError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "SegError is here!")
-    }
-}
-
-impl Error for SegError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        None
-    }
-}
-
-trait Aperture {
-	fn get_hw_start_addr(&self, total_system_memory: u64) -> Result<u64, SegError>;
-	fn get_hw_end_addr(&self, total_system_memory: u64) -> Result<u64, SegError>;
-	fn set_hw_start_addr(&mut self, total_system_memory: u64, new_start_addr: u64) -> Result<(), SegError>;
-}
-
-#[derive(Debug)]
-struct MemoryApertureError;
-struct MemoryAperture {
-	description: String,
-	bus_addr: u64,
-	hardware_addr: u64,
-	aperture_size: u64,
-	reg_name: String
-}
-
-impl Aperture for MemoryAperture {
-
-	fn get_hw_start_addr(&self, total_system_memory: u64) -> Result<u64, SegError> {
-		if self.hardware_addr > total_system_memory{
-			return Err(SegError {})
-		}
-		return Ok(self.hardware_addr)
-	}
-
-	fn get_hw_end_addr(&self, total_system_memory: u64) -> Result<u64, SegError> {
-	// the last hardware addr decided by whichever is lower:
-	// - the addr of the "highest" physical memory on the system
-	// - the and of the aperture into memory on this part of the bus
-
-		let aperture_max = self.hardware_addr + self.aperture_size;
-		if aperture_max > total_system_memory {
-			return Ok(total_system_memory)
-		} else {
-			return Ok(aperture_max)
-		}
-	}
-
-	fn set_hw_start_addr(&mut self, total_system_memory: u64, new_start_addr: u64) -> Result<(), SegError> {
-		if new_start_addr < total_system_memory {
-			self.hardware_addr = new_start_addr;
-			return Ok(())
-		} else {
-			return Err(SegError {})
-		}
-	}
-}
-
-trait SoC {
-	fn get_hw_start_addr_by_id(&self, total_system_memory: u64, id: usize) -> Result<u64, SegError>;
-	fn get_hw_end_addr_by_id(&self, total_system_memory: u64, id: usize) -> Result<u64, SegError>;
-	fn set_hw_start_addr_by_id(&mut self, new_start_addr: u64, id: usize) -> Result<(), SegError>;
-}
-
-struct MPFS {
-	total_system_memory: u64,
-	memory_apertures: Vec<MemoryAperture>,
-	current_aperture_id: Option<usize>
-}
-
-impl SoC for MPFS {
-
-	fn get_hw_start_addr_by_id(&self, total_system_memory: u64, id: usize) -> Result<u64, SegError> {
-		return self.memory_apertures[id].get_hw_start_addr(self.total_system_memory)
-	}
-
-	fn get_hw_end_addr_by_id(&self, total_system_memory: u64, id: usize) -> Result<u64, SegError> {
-		return self.memory_apertures[id].get_hw_end_addr(self.total_system_memory)
-	}
-
-	fn set_hw_start_addr_by_id(&mut self, new_start_addr: u64, id: usize) -> Result<(), SegError> {
-		return self.memory_apertures[id].set_hw_start_addr(self.total_system_memory, new_start_addr);
-	}
-}
-
-impl Default for MPFS {
-	fn default() -> MPFS {
-		MPFS {
-			total_system_memory: 0x8000_0000,
-			current_aperture_id: None,
-			memory_apertures: vec![
-				MemoryAperture {
-					description: "64-bit cached\t".to_string(),
-					reg_name: "seg0_1".to_string(),
-					bus_addr: 0x10_0000_0000,
-					hardware_addr: 0x00_0200_0000,
-					aperture_size: 0x40_000_0000,
-				},
-				MemoryAperture {
-					description: "64-bit non-cached".to_string(),
-					reg_name: "seg1_3".to_string(),
-					bus_addr: 0x14_0000_0000,
-					hardware_addr: 0x0,
-					aperture_size: 0x4000_0000,
-				},
-				MemoryAperture {
-					description: "64-bit WCB\t".to_string(),
-					reg_name: "seg1_5".to_string(),
-					bus_addr: 0x18_0000_0000,
-					hardware_addr: 0x0,
-					aperture_size: 0x4000_0000,
-				},
-				MemoryAperture {
-					description: "32-bit cached\t".to_string(),
-					reg_name: "seg0_0".to_string(),
-					bus_addr: 0x8000_0000,
-					hardware_addr: 0x0,
-					aperture_size: 0x4000_0000,
-				},
-				MemoryAperture {
-					description: "32-bit non-cached".to_string(),
-					reg_name: "seg1_2".to_string(),
-					bus_addr: 0xC000_0000,
-					hardware_addr: 0x0,
-					aperture_size: 0x1000_0000,
-				},
-				MemoryAperture {
-					description: "32-bit WCB\t".to_string(),
-					reg_name: "seg1_4".to_string(),
-					bus_addr: 0xD000_0000,
-					hardware_addr: 0x0,
-					aperture_size: 0x1000_0000,
-				}
-			]
-		}
-	}
-}
-
-fn seg_to_hw_start_addr(seg: u64, bus_addr: u64) -> u64
-{
-	let mut temp = seg;
-
-	if (temp & 0x4000) == 0 {
-	// if that bit isnt set, either this seg register is:
-	// - 0x0 (in which case the hw addr == the bus addr)
-	// - invalid (so treat as zero to match the bootloader's behaviour)
-		return bus_addr
-	}
-
-	temp &= 0x3FFF;
-	temp = 0x4000 - temp;
-	temp <<= 24;
-	return bus_addr - temp
-}
-
-fn hw_start_addr_to_seg(hw_start_addr: u64, bus_addr: u64) -> u64
-{
-	if bus_addr == hw_start_addr {
-	// a seg register is effectively how much we need to subtract from the
-	// bus addr to get the hw addr (not /quite/, but sorta) so if they're
-	// the same, then the seg register is 0x0
-		return 0x0
-	}
-
-	let mut temp = bus_addr;
-	temp -= hw_start_addr;
-	temp >>= 24;
-	return (0x4000 - temp) | 0x4000
-}
+mod soc;
+use crate::soc::SoC;
+use crate::soc::Aperture;
 
 fn hex_to_mib(hex: u64) -> u64
 {
 	return hex / (2_u64.pow(10).pow(2))
 }
 
-fn display_segs(memory_apertures: &Vec<MemoryAperture>)
+fn display_segs(memory_apertures: &Vec<soc::MemoryAperture>)
 {
 	print!("For insertion into config.yaml:\nseg-reg-config: {{ ");
 	for memory_aperture in memory_apertures {
 		print!("{}: {:#x?}, ",
 		       memory_aperture.reg_name,
-		       hw_start_addr_to_seg(memory_aperture.hardware_addr, memory_aperture.bus_addr)
+		       soc::hw_start_addr_to_seg(memory_aperture.hardware_addr, memory_aperture.bus_addr)
 		);
 	}
 	print!("}}\n");
 }
 
-fn display_status(board: &mut MPFS)
+fn display_status(board: &mut soc::MPFS)
 {
 	let mut config_is_valid: bool = true;
 	println!("Description | bus address | aperture hw start | aperture hw end | aperature size");
@@ -251,7 +76,7 @@ enum States {
 	Exit
 }
 
-fn init_handler(current_state: State, board: &mut MPFS) -> State
+fn init_handler(current_state: State, board: &mut soc::MPFS) -> State
 {
 	if current_state.previous_state_id == States::Exit {
 		println!("Default Memory Aperatures:");
@@ -264,7 +89,7 @@ fn init_handler(current_state: State, board: &mut MPFS) -> State
 	return State {state_id: States::WaitForInput, previous_state_id: current_state.state_id}
 }
 
-fn select_aperature_handler(current_state: State, board: &mut MPFS) -> State
+fn select_aperature_handler(current_state: State, board: &mut soc::MPFS) -> State
 {	
 	if current_state.previous_state_id != States::Init {
 		display_status(board);
@@ -282,7 +107,7 @@ fn select_aperature_handler(current_state: State, board: &mut MPFS) -> State
 	return State {state_id: States::WaitForInput, previous_state_id: current_state.state_id}
 }
 
-fn wait_for_input_handler(current_state: State, board: &mut MPFS) -> State
+fn wait_for_input_handler(current_state: State, board: &mut soc::MPFS) -> State
 {	
 	let mut next_state = State {state_id: States::Exit, previous_state_id: current_state.state_id};
 
@@ -342,7 +167,7 @@ fn wait_for_input_handler(current_state: State, board: &mut MPFS) -> State
 	return next_state
 }
 
-fn select_operation_handler(current_state: State, board: &mut MPFS) -> State
+fn select_operation_handler(current_state: State, board: &mut soc::MPFS) -> State
 {	
 	display_status(board);
 	print!("\nSet hardware start address: \n");
@@ -350,20 +175,20 @@ fn select_operation_handler(current_state: State, board: &mut MPFS) -> State
 	return State {state_id: States::WaitForInput, previous_state_id: current_state.state_id}
 }
 
-fn exit_handler(current_state: State, board: &mut MPFS) -> State
+fn exit_handler(current_state: State, board: &mut soc::MPFS) -> State
 {
 	print!("{{ ");
 	for memory_aperture in &board.memory_apertures {
 		print!("{}: {:#x?}, ",
 		       memory_aperture.reg_name,
-		       hw_start_addr_to_seg(memory_aperture.hardware_addr, memory_aperture.bus_addr)
+		       soc::hw_start_addr_to_seg(memory_aperture.hardware_addr, memory_aperture.bus_addr)
 		);
 	}
 	print!("}}\n");
 	std::process::exit(0)
 }
 
-const STATE_HANDLERS: [fn(State, &mut MPFS) -> State; 5] = [
+const STATE_HANDLERS: [fn(State, &mut soc::MPFS) -> State; 5] = [
 	init_handler,
 	select_aperature_handler,
 	wait_for_input_handler,
@@ -371,7 +196,7 @@ const STATE_HANDLERS: [fn(State, &mut MPFS) -> State; 5] = [
 	exit_handler
 ];
 
-fn get_next_state(current_state: State, board: &mut MPFS) -> State 
+fn get_next_state(current_state: State, board: &mut soc::MPFS) -> State 
 {
 	let next_state = STATE_HANDLERS[current_state.state_id as usize](current_state, board);
 	return next_state
@@ -383,7 +208,7 @@ fn main() {
 		previous_state_id: States::Exit
 	};
 
-	let mut board = MPFS::default();
+	let mut board = soc::MPFS::default();
 	loop {
 		next_state = get_next_state(next_state, &mut board);
 	}
