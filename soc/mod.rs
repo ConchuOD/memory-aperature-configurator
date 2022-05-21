@@ -19,9 +19,12 @@ impl Error for SegError {
 }
 
 pub trait Aperture {
-	fn get_hw_start_addr(&self, total_system_memory: u64) -> Result<u64, SegError>;
-	fn get_hw_end_addr(&self, total_system_memory: u64) -> Result<u64, SegError>;
-	fn set_hw_start_addr(&mut self, total_system_memory: u64, new_start_addr: u64) -> Result<(), SegError>;
+	fn get_hw_start_addr
+	(&self, total_system_memory: u64) -> Result<u64, SegError>;
+	fn get_hw_end_addr
+	(&self, total_system_memory: u64) -> Result<u64, SegError>;
+	fn set_hw_start_addr
+	(&mut self, total_system_memory: u64, new_start_addr: u64) -> Result<(), SegError>;
 }
 
 #[derive(Debug)]
@@ -36,14 +39,16 @@ pub struct MemoryAperture {
 
 impl Aperture for MemoryAperture {
 
-	fn get_hw_start_addr(&self, total_system_memory: u64) -> Result<u64, SegError> {
+	fn get_hw_start_addr(&self, total_system_memory: u64) -> Result<u64, SegError>
+	{
 		if self.hardware_addr > total_system_memory{
 			return Err(SegError {})
 		}
 		return Ok(self.hardware_addr)
 	}
 
-	fn get_hw_end_addr(&self, total_system_memory: u64) -> Result<u64, SegError> {
+	fn get_hw_end_addr(&self, total_system_memory: u64) -> Result<u64, SegError>
+	{
 	// the last hardware addr decided by whichever is lower:
 	// - the addr of the "highest" physical memory on the system
 	// - the and of the aperture into memory on this part of the bus
@@ -56,7 +61,9 @@ impl Aperture for MemoryAperture {
 		}
 	}
 
-	fn set_hw_start_addr(&mut self, total_system_memory: u64, new_start_addr: u64) -> Result<(), SegError> {
+	fn set_hw_start_addr
+	(&mut self, total_system_memory: u64, new_start_addr: u64) -> Result<(), SegError>
+	{
 		if new_start_addr < total_system_memory {
 			self.hardware_addr = new_start_addr;
 			return Ok(())
@@ -67,9 +74,12 @@ impl Aperture for MemoryAperture {
 }
 
 pub trait SoC {
-	fn get_hw_start_addr_by_id(&self, total_system_memory: u64, id: usize) -> Result<u64, SegError>;
-	fn get_hw_end_addr_by_id(&self, total_system_memory: u64, id: usize) -> Result<u64, SegError>;
-	fn set_hw_start_addr_by_id(&mut self, new_start_addr: u64, id: usize) -> Result<(), SegError>;
+	fn get_hw_start_addr_by_id
+	(&self, total_system_memory: u64, id: usize) -> Result<u64, SegError>;
+	fn get_hw_end_addr_by_id
+	(&self, total_system_memory: u64, id: usize) -> Result<u64, SegError>;
+	fn set_hw_start_addr_by_id
+	(&mut self, new_start_addr: u64, id: usize) -> Result<(), SegError>;
 }
 
 pub struct MPFS {
@@ -80,16 +90,23 @@ pub struct MPFS {
 
 impl SoC for MPFS {
 
-	fn get_hw_start_addr_by_id(&self, total_system_memory: u64, id: usize) -> Result<u64, SegError> {
+	fn get_hw_start_addr_by_id
+	(&self, total_system_memory: u64, id: usize) -> Result<u64, SegError>
+	{
 		return self.memory_apertures[id].get_hw_start_addr(self.total_system_memory)
 	}
 
-	fn get_hw_end_addr_by_id(&self, total_system_memory: u64, id: usize) -> Result<u64, SegError> {
+	fn get_hw_end_addr_by_id
+	(&self, total_system_memory: u64, id: usize) -> Result<u64, SegError>
+	{
 		return self.memory_apertures[id].get_hw_end_addr(self.total_system_memory)
 	}
 
-	fn set_hw_start_addr_by_id(&mut self, new_start_addr: u64, id: usize) -> Result<(), SegError> {
-		return self.memory_apertures[id].set_hw_start_addr(self.total_system_memory, new_start_addr);
+	fn set_hw_start_addr_by_id
+	(&mut self, new_start_addr: u64, id: usize) -> Result<(), SegError>
+	{
+		return self.memory_apertures[id].set_hw_start_addr(self.total_system_memory,
+								   new_start_addr);
 	}
 }
 
