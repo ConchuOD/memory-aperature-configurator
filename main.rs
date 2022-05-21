@@ -43,7 +43,8 @@ enum States {
 	Exit
 }
 
-fn init_handler(current_state: State, board: &mut soc::MPFS, input: Option<String>) -> State
+fn init_handler
+(current_state: State, board: &mut soc::MPFS, input: Option<String>) -> State
 {
 	board.total_system_memory = 0x8000_0000;
 
@@ -54,7 +55,8 @@ fn init_handler(current_state: State, board: &mut soc::MPFS, input: Option<Strin
 	}
 }
 
-fn select_aperature_handler(current_state: State, board: &mut soc::MPFS, input: Option<String>) -> State
+fn select_aperature_handler
+(current_state: State, board: &mut soc::MPFS, input: Option<String>) -> State
 {	
 	return State {
 		state_id: States::WaitForInput,
@@ -63,7 +65,8 @@ fn select_aperature_handler(current_state: State, board: &mut soc::MPFS, input: 
 	}
 }
 
-fn wait_for_input_handler(current_state: State, board: &mut soc::MPFS, input: Option<String>) -> State
+fn wait_for_input_handler
+(current_state: State, board: &mut soc::MPFS, input: Option<String>) -> State
 {	
 	let mut next_state = State {
 		state_id: States::WaitForInput,
@@ -80,7 +83,12 @@ fn wait_for_input_handler(current_state: State, board: &mut soc::MPFS, input: Op
 		let memory_trimmed = memory_raw.trim_start_matches("0x");
 		let memory = u64::from_str_radix(memory_trimmed, 16);
 		if memory.is_err() {
-			next_state.command_text = format!("Invalid amount of system memory ({}). Please enter a hex number", memory_raw).to_string();
+			next_state.command_text = format!(
+					"Invalid amount of system memory ({}). \
+					Please enter a hex number",
+					memory_raw
+				)
+				.to_string();
 			next_state.state_id = States::WaitForInput;
 			return next_state;
 		}
@@ -125,7 +133,11 @@ fn wait_for_input_handler(current_state: State, board: &mut soc::MPFS, input: Op
 
 		let current_aperture_id = board.current_aperture_id.unwrap();
 		if board.set_hw_start_addr_by_id(addr.unwrap(), current_aperture_id).is_err() {
-			println!("Failed setting hardware start address: requested address was greater than the total system memory.\nTry again - please enter a new hex number:");
+			println!(
+				"Failed setting hardware start address: requested address was \
+				greater than the total system memory.\n\
+				Try again - please enter a new hex number:"
+			);
 			next_state.state_id = current_state.state_id;
 			next_state.previous_state_id = States::SelectOperation;
 
@@ -139,14 +151,18 @@ fn wait_for_input_handler(current_state: State, board: &mut soc::MPFS, input: Op
 	return next_state
 }
 
-fn select_operation_handler(current_state: State, board: &mut soc::MPFS, input: Option<String>) -> State
+fn select_operation_handler
+(current_state: State, board: &mut soc::MPFS, input: Option<String>) -> State
 {	
 	let current_aperture_id = board.current_aperture_id.unwrap();
 
 	let mut next_state = State {
 		state_id: States::WaitForInput,
 		previous_state_id: current_state.state_id,
-		command_text: format!("Set hardware start address for {}:", board.memory_apertures[current_aperture_id].description)
+		command_text: format!(
+			"Set hardware start address for {}:", 
+			board.memory_apertures[current_aperture_id].description
+		)
 	};
 
 	return next_state
@@ -167,8 +183,8 @@ const STATE_HANDLERS: [fn(State, &mut soc::MPFS, input: Option<String>) -> State
 
 fn get_next_state(current_state: State, board: &mut soc::MPFS, input: &mut Vec<String>) -> State 
 {
-	let state_id = current_state.state_id;
-	let next_state = STATE_HANDLERS[current_state.state_id as usize](current_state, board, input.pop());
+	let state_id = current_state.state_id as usize;
+	let next_state = STATE_HANDLERS[state_id](current_state, board, input.pop());
 	input.clear();
 
 	return next_state
@@ -181,20 +197,25 @@ fn hex_to_mib(hex: u64) -> u64
 
 fn display_status<'a, B: tui::backend::Backend>(board: &mut soc::MPFS, frame:&mut Frame<B>, table_display: Rect, segs_display: Rect)
 {
-	let mut config_is_valid: bool = true;
 	let selected_style = Style::default().add_modifier(Modifier::REVERSED);
 	let normal_style = Style::default().bg(Color::Blue);
 	let header_cells =
 		["ID", "register", "Description", "bus address", "aperture hw start", "aperture hw end", "aperature size", ]
 		.iter()
-		.map(|h| Cell::from(*h).style(Style::default().fg(Color::White).bg(Color::Black)));
+		.map(|h|
+			Cell::from(*h)
+			.style(
+				Style::default()
+				.fg(Color::White)
+				.bg(Color::Black)
+			)
+		);
 	let header =
-		Row::new(header_cells)
-		.style(normal_style)
-		.height(1)
-		.bottom_margin(1);
+		Row::new(header_cells).height(1).bottom_margin(1);
 	
 	let mut data: Vec<Vec<String>> = Vec::new();
+	let mut config_is_valid: bool = true;
+
 	for memory_aperture in &board.memory_apertures {
 		let aperature_start = memory_aperture.get_hw_start_addr(board.total_system_memory);
 		let aperature_end = memory_aperture.get_hw_end_addr(board.total_system_memory);
@@ -211,18 +232,22 @@ fn display_status<'a, B: tui::backend::Backend>(board: &mut soc::MPFS, frame:&mu
 			row_cells.push("n/a MiB".to_string());
 			config_is_valid = false;
 		} else {
-			let aperature_size = aperature_end.as_ref().unwrap() - aperature_start.as_ref().unwrap();
+			let start = aperature_start.as_ref().unwrap();
+			let end = aperature_end.as_ref().unwrap();
+			let size = end - start;
 
-			row_cells.push(format!("{:#012x?}", aperature_start.as_ref().unwrap()));
-			row_cells.push(format!("{:#012x?}",aperature_end.as_ref().unwrap()));
-			row_cells.push(format!("{} MiB", hex_to_mib(aperature_size)));
+			row_cells.push(format!("{:#012x?}", start));
+			row_cells.push(format!("{:#012x?}", end));
+			row_cells.push(format!("{} MiB", hex_to_mib(size)));
 		}
 
 		data.push(row_cells.clone());
 	}
 
 	let rows = data.iter().map(|item| {
-		let cells = item.iter().map(|c| Cell::from(c.clone()));
+		let cells = item.iter().map(|c|
+			Cell::from(c.clone())
+		);
 		Row::new(cells).height(1).bottom_margin(1)
 	});
 
@@ -230,10 +255,11 @@ fn display_status<'a, B: tui::backend::Backend>(board: &mut soc::MPFS, frame:&mu
 	if config_is_valid {
 		output = format!("seg-reg-config: {{ ").to_owned();
 		for memory_aperture in &board.memory_apertures {
-			output +=
-				&format!("{}: {:#x?}, ",
+			output += &format!(
+				"{}: {:#x?}, ",
 				memory_aperture.reg_name,
-				soc::hw_start_addr_to_seg(memory_aperture.hardware_addr, memory_aperture.bus_addr)
+				soc::hw_start_addr_to_seg(memory_aperture.hardware_addr,
+							  memory_aperture.bus_addr)
 			).to_string();
 		}
 		output += &format!("}}\n").to_string();
@@ -242,14 +268,32 @@ fn display_status<'a, B: tui::backend::Backend>(board: &mut soc::MPFS, frame:&mu
 	}
 	let segs =
 		Paragraph::new(output)
-		.block(Block::default().title("For insertion into config.yaml:").borders(Borders::ALL))
-		.style(Style::default().fg(Color::White).bg(Color::Black));
+		.block(
+			Block::default()
+			.title("For insertion into config.yaml:")
+			.borders(Borders::ALL))
+		.style(
+			Style::default()
+			.fg(Color::White)
+			.bg(Color::Black)
+		);
 
 	let table =
 		Table::new(rows)
 		.header(header)
-		.block(Block::default().borders(Borders::ALL).title(format!("System memory available: {:#012x?}", board.total_system_memory)))
-		.style(Style::default().fg(Color::White).bg(Color::Black))
+		.block(
+			Block::default()
+			.borders(Borders::ALL)
+			.title(format!(
+				"System memory available: {:#012x?}",
+				board.total_system_memory)
+			)
+		)
+		.style(
+			Style::default()
+			.fg(Color::White)
+			.bg(Color::Black)
+		)
 		.highlight_style(selected_style)
 		.highlight_symbol(">> ")
 		.widths(&[
@@ -285,7 +329,8 @@ fn main() -> Result<(), io::Error> {
 	loop {
 		let command_text = next_state.command_text.clone();
 		terminal.draw(|frame| {
-			let chunks = Layout::default()
+			let chunks = 
+				Layout::default()
 				.direction(Direction::Vertical)
 				.constraints(
 				[
@@ -301,9 +346,17 @@ fn main() -> Result<(), io::Error> {
 			
 			let txt = format!("{}\n{}", command_text, input);
 			
-			let graph = Paragraph::new(txt)
-			.block(Block::default().title("Press Esc to quit").borders(Borders::ALL))
-			.style(Style::default().fg(Color::White).bg(Color::Black));
+			let graph =
+				Paragraph::new(txt)
+				.block(
+					Block::default()
+					.title("Press Esc to quit")
+					.borders(Borders::ALL))
+				.style(
+					Style::default()
+					.fg(Color::White)
+					.bg(Color::Black)
+				);
 
 			frame.render_widget(graph, chunks[2]);
 		})?;
