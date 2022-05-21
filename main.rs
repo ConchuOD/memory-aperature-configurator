@@ -200,7 +200,10 @@ fn display_status<'a, B: tui::backend::Backend>(board: &mut soc::MPFS, frame:&mu
 	let selected_style = Style::default().add_modifier(Modifier::REVERSED);
 	let normal_style = Style::default().bg(Color::Blue);
 	let header_cells =
-		["ID", "register", "Description", "bus address", "aperture hw start", "aperture hw end", "aperature size", ]
+		[
+			"ID", "Register", "Description", "Bus Address",
+			"Aperture HW Start", "Aperture HW End", "Aperature Size",
+		 ]
 		.iter()
 		.map(|h|
 			Cell::from(*h)
