@@ -10,22 +10,18 @@ use std::time::Duration;
 use tui::{
 	backend::{CrosstermBackend},
 	layout::{Constraint, Direction, Layout, Rect},
-	text::Spans,
 	style::{Color, Modifier, Style},
-	widgets::{Block, Borders, Paragraph, Cell, Row, Table, TableState},
+	widgets::{Block, Borders, Paragraph, Cell, Row, Table},
 	Frame, Terminal,
 };
 use crossterm::{
 	event::{self, Event, KeyCode},
-	execute,
 	terminal::{disable_raw_mode, enable_raw_mode},
 };
 
 mod soc;
-use crate::soc::SoC;
 use crate::soc::Aperture;
 mod states;
-use crate::states::States;
 
 fn hex_to_mib(hex: u64) -> u64
 {
@@ -92,7 +88,7 @@ fn display_status<'a, B: tui::backend::Backend>
 		Row::new(cells).height(1).bottom_margin(1)
 	});
 
-	let mut output = "".to_string();
+	let mut output;
 	if config_is_valid {
 		output = format!("seg-reg-config: {{ ").to_owned();
 		for memory_aperture in &board.memory_apertures {
@@ -167,7 +163,7 @@ fn display_status<'a, B: tui::backend::Backend>
 fn main() -> Result<(), io::Error> {
 	let mut next_state = states::State::default();
 	let mut board = soc::MPFS::default();
-	let mut stdout = io::stdout();
+	let stdout = io::stdout();
 	let backend = CrosstermBackend::new(stdout);
 	let mut terminal = Terminal::new(backend)?;
 	let mut input: String = String::new();
@@ -233,7 +229,9 @@ fn main() -> Result<(), io::Error> {
 					}
 					KeyCode::Esc => {
 						terminal.clear()?;
-						disable_raw_mode();
+						if disable_raw_mode().is_err() {
+							panic!("Failed to clean up terminal");
+						}
 						return Ok(());
 					}
 					KeyCode::Enter => {
