@@ -168,17 +168,9 @@ const STATE_HANDLERS: [fn(State, &mut soc::MPFS, input: Option<String>) -> State
 fn get_next_state(current_state: State, board: &mut soc::MPFS, input: &mut Vec<String>) -> State 
 {
 	let state_id = current_state.state_id;
-	//todo remove
-	let mut string = None;
-	
-	let input_entry = input.pop();
-	if input_entry.is_some() {
-		string = Some(input_entry.unwrap());
-	}
-	//to here
-
-	let next_state = STATE_HANDLERS[current_state.state_id as usize](current_state, board, string);
+	let next_state = STATE_HANDLERS[current_state.state_id as usize](current_state, board, input.pop());
 	input.clear();
+
 	return next_state
 }
 
