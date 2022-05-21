@@ -48,7 +48,7 @@ fn display_status<'a, B: tui::backend::Backend>(board: &mut soc::MPFS, frame:&mu
 	let selected_style = Style::default().add_modifier(Modifier::REVERSED);
 	let normal_style = Style::default().bg(Color::Blue);
 	let header_cells =
-		["ID", "Description", "bus address", "aperture hw start", "aperture hw end", "aperature size", "register"]
+		["ID", "register", "Description", "bus address", "aperture hw start", "aperture hw end", "aperature size", ]
 		.iter()
 		.map(|h| Cell::from(*h).style(Style::default().fg(Color::White)));
 	let header =
@@ -56,36 +56,29 @@ fn display_status<'a, B: tui::backend::Backend>(board: &mut soc::MPFS, frame:&mu
 		.style(normal_style)
 		.height(1)
 		.bottom_margin(1);
-	let rows: Vec<Row> = Vec::new();
 	
 	let mut data: Vec<Vec<String>> = Vec::new();
 	for memory_aperture in &board.memory_apertures {
 		let aperature_start = memory_aperture.get_hw_start_addr(board.total_system_memory);
 		let aperature_end = memory_aperture.get_hw_end_addr(board.total_system_memory);
+	
+		let mut row_cells: Vec<String> = Vec::new();
+		row_cells.push(data.len().to_string());
+		row_cells.push(memory_aperture.reg_name.clone());
+		row_cells.push(memory_aperture.description.clone());
+		row_cells.push(format!("{:#012x?}", memory_aperture.bus_addr));
 
 		if aperature_start.is_err() || aperature_end.is_err() {
-
-			let mut row_cells: Vec<String> = Vec::new();
-			row_cells.push("0".to_string());
-			row_cells.push(memory_aperture.description.clone());
-			row_cells.push(format!("{:#012x?}", memory_aperture.bus_addr));
 			row_cells.push("invalid".to_string());
 			row_cells.push("invalid".to_string());
 			row_cells.push("n/a MiB".to_string());
-			row_cells.push(memory_aperture.reg_name.clone());
-			data.push(row_cells.clone());
-			continue;
-		}
+		} else {
+			let aperature_size = aperature_end.as_ref().unwrap() - aperature_start.as_ref().unwrap();
 
-		let aperature_size = aperature_end.as_ref().unwrap() - aperature_start.as_ref().unwrap();
-		let mut row_cells: Vec<String> = Vec::new();
-		row_cells.push("0".to_string());
-		row_cells.push(memory_aperture.description.clone());
-		row_cells.push(format!("{:#012x?}", memory_aperture.bus_addr));
-		row_cells.push(format!("{:#012x?}", aperature_start.as_ref().unwrap()));
-		row_cells.push(format!("{:#012x?}",aperature_end.as_ref().unwrap()));
-		row_cells.push(format!("{} MiB", hex_to_mib(aperature_size)));
-		row_cells.push(memory_aperture.reg_name.clone());
+			row_cells.push(format!("{:#012x?}", aperature_start.as_ref().unwrap()));
+			row_cells.push(format!("{:#012x?}",aperature_end.as_ref().unwrap()));
+			row_cells.push(format!("{} MiB", hex_to_mib(aperature_size)));
+		}
 
 		data.push(row_cells.clone());
 	}
@@ -106,8 +99,8 @@ fn display_status<'a, B: tui::backend::Backend>(board: &mut soc::MPFS, frame:&mu
 	.highlight_symbol(">> ")
 	.widths(&[
 		Constraint::Percentage(5),
+		Constraint::Percentage(5),
 		Constraint::Percentage(25),
-		Constraint::Percentage(12),
 		Constraint::Percentage(12),
 		Constraint::Percentage(12),
 		Constraint::Percentage(12),
@@ -151,7 +144,7 @@ fn select_aperature_handler(current_state: State, board: &mut soc::MPFS, input: 
 	return State {
 		state_id: States::WaitForInput,
 		previous_state_id: current_state.state_id,
-		command_text: "Select an aperture:".to_string()
+		command_text: "Enter an aperature ID to edit:".to_string()
 	}
 }
 
