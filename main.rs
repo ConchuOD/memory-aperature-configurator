@@ -5,7 +5,22 @@
 #![deny(clippy::implicit_return)]
 #![allow(clippy::needless_return)]
 
-use text_io::read;
+use std::io;
+use std::time::Duration;
+use tui::{
+	backend::{CrosstermBackend},
+	layout::{Constraint, Direction, Layout, Rect},
+	text::Spans,
+	style::{Color, Modifier, Style},
+	widgets::{Block, Borders, Paragraph, Cell, Row, Table, TableState},
+	Frame, Terminal,
+};
+use crossterm::{
+	event::{self, Event, KeyCode},
+	execute,
+	terminal::{disable_raw_mode, enable_raw_mode},
+};
+
 mod soc;
 use crate::soc::SoC;
 use crate::soc::Aperture;
@@ -17,57 +32,101 @@ fn hex_to_mib(hex: u64) -> u64
 
 fn display_segs(memory_apertures: &Vec<soc::MemoryAperture>)
 {
-	print!("For insertion into config.yaml:\nseg-reg-config: {{ ");
+	let mut output = format!("For insertion into config.yaml:\nseg-reg-config: {{ ").to_owned();
 	for memory_aperture in memory_apertures {
-		print!("{}: {:#x?}, ",
+		output += &format!("{}: {:#x?}, ",
 		       memory_aperture.reg_name,
 		       soc::hw_start_addr_to_seg(memory_aperture.hardware_addr, memory_aperture.bus_addr)
-		);
+		).to_string();
 	}
-	print!("}}\n");
+	output += &format!("}}\n").to_string();
 }
 
-fn display_status(board: &mut soc::MPFS)
+fn display_status<'a, B: tui::backend::Backend>(board: &mut soc::MPFS, frame:&mut Frame<B>, chunk: Rect)
 {
 	let mut config_is_valid: bool = true;
-	println!("Description | bus address | aperture hw start | aperture hw end | aperature size");
+	let selected_style = Style::default().add_modifier(Modifier::REVERSED);
+	let normal_style = Style::default().bg(Color::Blue);
+	let header_cells =
+		["ID", "Description", "bus address", "aperture hw start", "aperture hw end", "aperature size", "register"]
+		.iter()
+		.map(|h| Cell::from(*h).style(Style::default().fg(Color::White)));
+	let header =
+		Row::new(header_cells)
+		.style(normal_style)
+		.height(1)
+		.bottom_margin(1);
+	let rows: Vec<Row> = Vec::new();
+	
+	let mut data: Vec<Vec<String>> = Vec::new();
 	for memory_aperture in &board.memory_apertures {
 		let aperature_start = memory_aperture.get_hw_start_addr(board.total_system_memory);
 		let aperature_end = memory_aperture.get_hw_end_addr(board.total_system_memory);
 
 		if aperature_start.is_err() || aperature_end.is_err() {
-			println!("| {}\t | {:#012x?} | invalid | invalid | n/a MiB",
-				 memory_aperture.description,
-				 memory_aperture.bus_addr
-			);
 
-			config_is_valid = false;
-			continue
+			let mut row_cells: Vec<String> = Vec::new();
+			row_cells.push("0".to_string());
+			row_cells.push(memory_aperture.description.clone());
+			row_cells.push(format!("{:#012x?}", memory_aperture.bus_addr));
+			row_cells.push("invalid".to_string());
+			row_cells.push("invalid".to_string());
+			row_cells.push("n/a MiB".to_string());
+			row_cells.push(memory_aperture.reg_name.clone());
+			data.push(row_cells.clone());
+			continue;
 		}
 
 		let aperature_size = aperature_end.as_ref().unwrap() - aperature_start.as_ref().unwrap();
-		println!("| {}\t | {:#012x?} | {:#012x?} | {:#012x?} | {} MiB",
-			 memory_aperture.description,
-			 memory_aperture.bus_addr,
-			 aperature_start.as_ref().unwrap(),
-			 aperature_end.as_ref().unwrap(),
-			 hex_to_mib(aperature_size)
-		);
+		let mut row_cells: Vec<String> = Vec::new();
+		row_cells.push("0".to_string());
+		row_cells.push(memory_aperture.description.clone());
+		row_cells.push(format!("{:#012x?}", memory_aperture.bus_addr));
+		row_cells.push(format!("{:#012x?}", aperature_start.as_ref().unwrap()));
+		row_cells.push(format!("{:#012x?}",aperature_end.as_ref().unwrap()));
+		row_cells.push(format!("{} MiB", hex_to_mib(aperature_size)));
+		row_cells.push(memory_aperture.reg_name.clone());
+
+		data.push(row_cells.clone());
 	}
 
-	if config_is_valid {
-		display_segs(&board.memory_apertures)
-	}
+	let rows = data.iter().map(|item| {
+		let cells = item.iter().map(|c| Cell::from(c.clone()));
+		Row::new(cells).height(1).bottom_margin(1)
+	});
+
+	// if config_is_valid {
+	// 	display_segs(&board.memory_apertures);
+	// }
+
+	let t = Table::new(rows)
+	.header(header)
+	.block(Block::default().borders(Borders::ALL).title("Table"))
+	.highlight_style(selected_style)
+	.highlight_symbol(">> ")
+	.widths(&[
+		Constraint::Percentage(5),
+		Constraint::Percentage(25),
+		Constraint::Percentage(12),
+		Constraint::Percentage(12),
+		Constraint::Percentage(12),
+		Constraint::Percentage(12),
+		Constraint::Percentage(12),
+	]);
+
+	frame.render_widget(t, chunk);
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 struct State {
 	state_id: States,
-	previous_state_id: States
+	previous_state_id: States,
+	command_text: String
 }
 
 #[derive(Copy, Clone)]
 #[derive(PartialEq)]
+#[derive(Debug)]
 enum States {
 	Init,
 	SelectAperature,
@@ -76,49 +135,47 @@ enum States {
 	Exit
 }
 
-fn init_handler(current_state: State, board: &mut soc::MPFS) -> State
+fn init_handler(current_state: State, board: &mut soc::MPFS, input: Option<String>) -> State
 {
-	if current_state.previous_state_id == States::Exit {
-		println!("Default Memory Aperatures:");
-		display_status(board);
-	}
-
 	board.total_system_memory = 0x8000_0000;
-	print!("\nEnter total system memory in hex:\n");
 
-	return State {state_id: States::WaitForInput, previous_state_id: current_state.state_id}
+	return State {
+		state_id: States::WaitForInput,
+		previous_state_id: current_state.state_id,
+		command_text: format!("Enter total system memory in hex:")
+	}
 }
 
-fn select_aperature_handler(current_state: State, board: &mut soc::MPFS) -> State
+fn select_aperature_handler(current_state: State, board: &mut soc::MPFS, input: Option<String>) -> State
 {	
-	if current_state.previous_state_id != States::Init {
-		display_status(board);
+	return State {
+		state_id: States::WaitForInput,
+		previous_state_id: current_state.state_id,
+		command_text: "Select an aperture:".to_string()
 	}
-
-	let aperature_iter = board.memory_apertures.iter();
-	print!("\n\nPress to edit: \n");
-	for (i, memory_aperture) in aperature_iter.enumerate() {
-		println!("{}: {}",
-		       i,
-		       memory_aperture.description
-		);
-	}
-
-	return State {state_id: States::WaitForInput, previous_state_id: current_state.state_id}
 }
 
-fn wait_for_input_handler(current_state: State, board: &mut soc::MPFS) -> State
+fn wait_for_input_handler(current_state: State, board: &mut soc::MPFS, input: Option<String>) -> State
 {	
-	let mut next_state = State {state_id: States::Exit, previous_state_id: current_state.state_id};
+	let mut next_state = State {
+		state_id: States::WaitForInput,
+		previous_state_id: current_state.previous_state_id,
+		command_text: current_state.command_text
+	};
+
+	if input.is_none() {
+		// next_state.command_text.push_str(&format!("{:?}", current_state.previous_state_id));
+		return next_state;
+	}
 
 	if current_state.previous_state_id == States::Init {
-		let memory_raw: String = read!("{}");
+		let memory_raw: String = input.unwrap();
 		let memory_trimmed = memory_raw.trim_start_matches("0x");
 		let memory = u64::from_str_radix(memory_trimmed, 16);
 		if memory.is_err() {
-			println!("Invalid amount of system memory. Please enter a hex number");
-			next_state.state_id = States::Init;
-			return next_state; 
+			next_state.command_text = format!("Invalid amount of system memory ({}). Please enter a hex number", memory_raw).to_string();
+			next_state.state_id = States::WaitForInput;
+			return next_state;
 		}
 
 		board.total_system_memory = memory.unwrap();
@@ -128,27 +185,36 @@ fn wait_for_input_handler(current_state: State, board: &mut soc::MPFS) -> State
 	}
 
 	if current_state.previous_state_id == States::SelectAperature {
-		let aperature_id: u64 = read!();
-		if aperature_id as usize >= board.memory_apertures.len() {
+		let aperature_id_raw: String = input.unwrap();
+		let aperature_id_trimmed = aperature_id_raw.trim_start_matches("0x");
+		let aperature_id = u64::from_str_radix(aperature_id_trimmed, 16);
+		if aperature_id.is_err() {
+			println!("Invalid address. Please enter a hex number");
+			next_state.state_id = States::SelectOperation;
+			return next_state;
+		}
+		let id = aperature_id.unwrap();
+		if id as usize >= board.memory_apertures.len() {
 		//invalid aperature
 			next_state.state_id = States::SelectAperature;
+			next_state.command_text = format!("Invalid aperature ID").to_string();
 			return next_state;
 		}
 		
-		board.current_aperture_id = Some(aperature_id as usize);
+		board.current_aperture_id = Some(id as usize);
 
 		next_state.state_id = States::SelectOperation;
 		return next_state;
 	}
 
 	if current_state.previous_state_id == States::SelectOperation {
-		let addr_raw: String = read!("{}");
+		let addr_raw: String = input.unwrap();
 		let addr_trimmed = addr_raw.trim_start_matches("0x");
 		let addr = u64::from_str_radix(addr_trimmed, 16);
 		if addr.is_err() {
 			println!("Invalid address. Please enter a hex number");
 			next_state.state_id = States::SelectOperation;
-			return next_state; 
+			return next_state;
 		}
 
 		let current_aperture_id = board.current_aperture_id.unwrap();
@@ -167,28 +233,25 @@ fn wait_for_input_handler(current_state: State, board: &mut soc::MPFS) -> State
 	return next_state
 }
 
-fn select_operation_handler(current_state: State, board: &mut soc::MPFS) -> State
+fn select_operation_handler(current_state: State, board: &mut soc::MPFS, input: Option<String>) -> State
 {	
-	display_status(board);
-	print!("\nSet hardware start address: \n");
+	let current_aperture_id = board.current_aperture_id.unwrap();
 
-	return State {state_id: States::WaitForInput, previous_state_id: current_state.state_id}
+	let mut next_state = State {
+		state_id: States::WaitForInput,
+		previous_state_id: current_state.state_id,
+		command_text: format!("Set hardware start address for {}:", board.memory_apertures[current_aperture_id].description)
+	};
+
+	return next_state
 }
 
-fn exit_handler(current_state: State, board: &mut soc::MPFS) -> State
+fn exit_handler(current_state: State, board: &mut soc::MPFS, input: Option<String>) -> State
 {
-	print!("{{ ");
-	for memory_aperture in &board.memory_apertures {
-		print!("{}: {:#x?}, ",
-		       memory_aperture.reg_name,
-		       soc::hw_start_addr_to_seg(memory_aperture.hardware_addr, memory_aperture.bus_addr)
-		);
-	}
-	print!("}}\n");
 	std::process::exit(0)
 }
 
-const STATE_HANDLERS: [fn(State, &mut soc::MPFS) -> State; 5] = [
+const STATE_HANDLERS: [fn(State, &mut soc::MPFS, input: Option<String>) -> State; 5] = [
 	init_handler,
 	select_aperature_handler,
 	wait_for_input_handler,
@@ -196,20 +259,92 @@ const STATE_HANDLERS: [fn(State, &mut soc::MPFS) -> State; 5] = [
 	exit_handler
 ];
 
-fn get_next_state(current_state: State, board: &mut soc::MPFS) -> State 
+fn get_next_state(current_state: State, board: &mut soc::MPFS, input: &mut Vec<String>) -> State 
 {
-	let next_state = STATE_HANDLERS[current_state.state_id as usize](current_state, board);
+	let state_id = current_state.state_id;
+	//todo remove
+	let mut string = None;
+	
+	let input_entry = input.pop();
+	if input_entry.is_some() {
+		string = Some(input_entry.unwrap());
+	}
+	//to here
+
+	let next_state = STATE_HANDLERS[current_state.state_id as usize](current_state, board, string);
+	input.clear();
 	return next_state
 }
 
-fn main() {
+fn main() -> Result<(), io::Error> {
 	let mut next_state = State {
 		state_id: States::Init,
-		previous_state_id: States::Exit
+		previous_state_id: States::Exit,
+		command_text: "Press Enter to begin...".to_string()
 	};
-
 	let mut board = soc::MPFS::default();
+	let mut stdout = io::stdout();
+	let backend = CrosstermBackend::new(stdout);
+	let mut terminal = Terminal::new(backend)?;
+	let mut input: String = String::new();
+	let mut messages: Vec<String> = Vec::new();
+
+	enable_raw_mode()?;
+	terminal.clear()?;
+
 	loop {
-		next_state = get_next_state(next_state, &mut board);
+		let command_text = next_state.command_text.clone();
+		terminal.draw(|frame| {
+			let chunks = Layout::default()
+				.direction(Direction::Vertical)
+				.constraints(
+				[
+					Constraint::Percentage(80),
+					Constraint::Percentage(20),
+				]
+				.as_ref(),
+				)
+				.split(frame.size());
+
+				
+			let display = Paragraph::new("")
+			.block(Block::default().title(format!("System memory available: {:#012x?}", board.total_system_memory)).borders(Borders::ALL))
+			.style(Style::default().fg(Color::White).bg(Color::Black));
+			
+			display_status(&mut board, frame, chunks[0]);
+			frame.render_widget(display, chunks[0]);
+
+			let txt = format!("{}\n{}", command_text, input);
+
+			let graph = Paragraph::new(txt)
+				.block(Block::default().title("Press Esc to quit").borders(Borders::ALL))
+				.style(Style::default().fg(Color::White).bg(Color::Black));
+
+			frame.render_widget(graph, chunks[1]);
+		})?;
+
+		if event::poll(Duration::from_millis(30))? {
+			if let Event::Key(key) = event::read()? {
+				match key.code {
+					KeyCode::Char(c) => {
+						input.push(c);
+					}
+					KeyCode::Backspace => {
+						input.pop();
+					}
+					KeyCode::Esc => {
+						terminal.clear()?;
+						disable_raw_mode();
+						return Ok(());
+					}
+					KeyCode::Enter => {
+						messages.push(input.drain(..).collect());
+					}
+					_ => {}
+				}
+			}
+		}
+
+		next_state = get_next_state(next_state, &mut board, &mut messages);
 	}
 }

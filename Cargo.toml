@@ -7,6 +7,9 @@ edition = "2021"
 
 [dependencies]
 text_io = "0.1.10"
+crossterm = "0.23"
+tui = { version = "0.17", features = ["termion"] }
+failure = "0.1"
 
 [[bin]]
 name = "seg-configurator"

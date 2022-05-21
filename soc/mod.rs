@@ -102,7 +102,7 @@ impl Default for MPFS {
 					reg_name: "seg0_1".to_string(),
 					bus_addr: 0x10_0000_0000,
 					hardware_addr: 0x00_0200_0000,
-					aperture_size: 0x40_000_0000,
+					aperture_size: 0x40_0000_0000,
 				},
 				MemoryAperture {
 					description: "64-bit non-cached".to_string(),
