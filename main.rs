@@ -179,19 +179,7 @@ fn hex_to_mib(hex: u64) -> u64
 	return hex / (2_u64.pow(10).pow(2))
 }
 
-fn display_segs(memory_apertures: &Vec<soc::MemoryAperture>)
-{
-	let mut output = format!("For insertion into config.yaml:\nseg-reg-config: {{ ").to_owned();
-	for memory_aperture in memory_apertures {
-		output += &format!("{}: {:#x?}, ",
-		       memory_aperture.reg_name,
-		       soc::hw_start_addr_to_seg(memory_aperture.hardware_addr, memory_aperture.bus_addr)
-		).to_string();
-	}
-	output += &format!("}}\n").to_string();
-}
-
-fn display_status<'a, B: tui::backend::Backend>(board: &mut soc::MPFS, frame:&mut Frame<B>, chunk: Rect)
+fn display_status<'a, B: tui::backend::Backend>(board: &mut soc::MPFS, frame:&mut Frame<B>, table_display: Rect, segs_display: Rect)
 {
 	let mut config_is_valid: bool = true;
 	let selected_style = Style::default().add_modifier(Modifier::REVERSED);
@@ -199,7 +187,7 @@ fn display_status<'a, B: tui::backend::Backend>(board: &mut soc::MPFS, frame:&mu
 	let header_cells =
 		["ID", "register", "Description", "bus address", "aperture hw start", "aperture hw end", "aperature size", ]
 		.iter()
-		.map(|h| Cell::from(*h).style(Style::default().fg(Color::White)));
+		.map(|h| Cell::from(*h).style(Style::default().fg(Color::White).bg(Color::Black)));
 	let header =
 		Row::new(header_cells)
 		.style(normal_style)
@@ -221,6 +209,7 @@ fn display_status<'a, B: tui::backend::Backend>(board: &mut soc::MPFS, frame:&mu
 			row_cells.push("invalid".to_string());
 			row_cells.push("invalid".to_string());
 			row_cells.push("n/a MiB".to_string());
+			config_is_valid = false;
 		} else {
 			let aperature_size = aperature_end.as_ref().unwrap() - aperature_start.as_ref().unwrap();
 
@@ -237,26 +226,44 @@ fn display_status<'a, B: tui::backend::Backend>(board: &mut soc::MPFS, frame:&mu
 		Row::new(cells).height(1).bottom_margin(1)
 	});
 
-	// if config_is_valid {
-	// 	display_segs(&board.memory_apertures);
-	// }
+	let mut output = "".to_string();
+	if config_is_valid {
+		output = format!("seg-reg-config: {{ ").to_owned();
+		for memory_aperture in &board.memory_apertures {
+			output +=
+				&format!("{}: {:#x?}, ",
+				memory_aperture.reg_name,
+				soc::hw_start_addr_to_seg(memory_aperture.hardware_addr, memory_aperture.bus_addr)
+			).to_string();
+		}
+		output += &format!("}}\n").to_string();
+	} else {
+		output = format!("Cannot calculate seg registers, configuration is invalid.");
+	}
+	let segs =
+		Paragraph::new(output)
+		.block(Block::default().title("For insertion into config.yaml:").borders(Borders::ALL))
+		.style(Style::default().fg(Color::White).bg(Color::Black));
 
-	let t = Table::new(rows)
-	.header(header)
-	.block(Block::default().borders(Borders::ALL).title("Table"))
-	.highlight_style(selected_style)
-	.highlight_symbol(">> ")
-	.widths(&[
-		Constraint::Percentage(5),
-		Constraint::Percentage(5),
-		Constraint::Percentage(25),
-		Constraint::Percentage(12),
-		Constraint::Percentage(12),
-		Constraint::Percentage(12),
-		Constraint::Percentage(12),
-	]);
+	let table =
+		Table::new(rows)
+		.header(header)
+		.block(Block::default().borders(Borders::ALL).title(format!("System memory available: {:#012x?}", board.total_system_memory)))
+		.style(Style::default().fg(Color::White).bg(Color::Black))
+		.highlight_style(selected_style)
+		.highlight_symbol(">> ")
+		.widths(&[
+			Constraint::Percentage(5),
+			Constraint::Percentage(5),
+			Constraint::Percentage(25),
+			Constraint::Percentage(12),
+			Constraint::Percentage(12),
+			Constraint::Percentage(12),
+			Constraint::Percentage(12),
+		]);
 
-	frame.render_widget(t, chunk);
+	frame.render_widget(table, table_display);
+	frame.render_widget(segs, segs_display);
 }
 
 fn main() -> Result<(), io::Error> {
@@ -282,28 +289,23 @@ fn main() -> Result<(), io::Error> {
 				.direction(Direction::Vertical)
 				.constraints(
 				[
-					Constraint::Percentage(80),
-					Constraint::Percentage(20),
+					Constraint::Percentage(70),
+					Constraint::Percentage(15),
+					Constraint::Percentage(15),
 				]
 				.as_ref(),
 				)
 				.split(frame.size());
 
-				
-			let display = Paragraph::new("")
-			.block(Block::default().title(format!("System memory available: {:#012x?}", board.total_system_memory)).borders(Borders::ALL))
-			.style(Style::default().fg(Color::White).bg(Color::Black));
+			display_status(&mut board, frame, chunks[0], chunks[1]);
 			
-			display_status(&mut board, frame, chunks[0]);
-			frame.render_widget(display, chunks[0]);
-
 			let txt = format!("{}\n{}", command_text, input);
-
+			
 			let graph = Paragraph::new(txt)
-				.block(Block::default().title("Press Esc to quit").borders(Borders::ALL))
-				.style(Style::default().fg(Color::White).bg(Color::Black));
+			.block(Block::default().title("Press Esc to quit").borders(Borders::ALL))
+			.style(Style::default().fg(Color::White).bg(Color::Black));
 
-			frame.render_widget(graph, chunks[1]);
+			frame.render_widget(graph, chunks[2]);
 		})?;
 
 		if event::poll(Duration::from_millis(30))? {
