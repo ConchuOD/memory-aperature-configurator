@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT or GPL-2.0
+
 use std::error::Error;
 use std::fmt;
 #[derive(Debug)]
