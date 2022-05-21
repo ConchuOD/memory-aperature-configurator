@@ -195,7 +195,8 @@ fn hex_to_mib(hex: u64) -> u64
 	return hex / (2_u64.pow(10).pow(2))
 }
 
-fn display_status<'a, B: tui::backend::Backend>(board: &mut soc::MPFS, frame:&mut Frame<B>, table_display: Rect, segs_display: Rect)
+fn display_status<'a, B: tui::backend::Backend>
+(board: &mut soc::MPFS, frame:&mut Frame<B>, display_rect: Rect)
 {
 	let selected_style = Style::default().add_modifier(Modifier::REVERSED);
 	let normal_style = Style::default().bg(Color::Blue);
@@ -269,6 +270,19 @@ fn display_status<'a, B: tui::backend::Backend>(board: &mut soc::MPFS, frame:&mu
 	} else {
 		output = format!("Cannot calculate seg registers, configuration is invalid.");
 	}
+
+	let chunks =
+		Layout::default()
+		.direction(Direction::Vertical)
+		.constraints(
+		[
+			Constraint::Percentage(85),
+			Constraint::Percentage(15),
+		]
+		.as_ref(),
+		)
+		.split(display_rect);
+
 	let segs =
 		Paragraph::new(output)
 		.block(
@@ -309,8 +323,8 @@ fn display_status<'a, B: tui::backend::Backend>(board: &mut soc::MPFS, frame:&mu
 			Constraint::Percentage(12),
 		]);
 
-	frame.render_widget(table, table_display);
-	frame.render_widget(segs, segs_display);
+	frame.render_widget(table, chunks[0]);
+	frame.render_widget(segs, chunks[1]);
 }
 
 fn main() -> Result<(), io::Error> {
@@ -332,20 +346,31 @@ fn main() -> Result<(), io::Error> {
 	loop {
 		let command_text = next_state.command_text.clone();
 		terminal.draw(|frame| {
-			let chunks = 
+			let entire_window = 
 				Layout::default()
 				.direction(Direction::Vertical)
 				.constraints(
 				[
-					Constraint::Percentage(70),
-					Constraint::Percentage(15),
+					Constraint::Percentage(85),
 					Constraint::Percentage(15),
 				]
 				.as_ref(),
 				)
 				.split(frame.size());
+			
+			let display_area = 
+				Layout::default()
+				.direction(Direction::Horizontal)
+				.constraints(
+				[
+					Constraint::Percentage(33),
+					Constraint::Percentage(67),
+				]
+				.as_ref(),
+				)
+				.split(entire_window[0]);
 
-			display_status(&mut board, frame, chunks[0], chunks[1]);
+			display_status(&mut board, frame, display_area[1]);
 			
 			let txt = format!("{}\n{}", command_text, input);
 			
@@ -361,7 +386,7 @@ fn main() -> Result<(), io::Error> {
 					.bg(Color::Black)
 				);
 
-			frame.render_widget(graph, chunks[2]);
+			frame.render_widget(graph, entire_window[1]);
 		})?;
 
 		if event::poll(Duration::from_millis(30))? {
