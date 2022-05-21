@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT or GPL-2.0
+
 use crate::soc;
 use crate::soc::SoC;
 
