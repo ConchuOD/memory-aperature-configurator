@@ -8,13 +8,13 @@ pub struct SegError {
 
 impl fmt::Display for SegError {
 fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-	write!(f, "SegError is here!")
+	return write!(f, "SegError is here!")
 }
 }
 
 impl Error for SegError {
 	fn source(&self) -> Option<&(dyn Error + 'static)> {
-	None
+	return None
 }
 }
 
@@ -95,7 +95,7 @@ impl SoC for MPFS {
 
 impl Default for MPFS {
 	fn default() -> MPFS {
-		MPFS {
+		return MPFS {
 			total_system_memory: 0x8000_0000,
 			current_aperture_id: None,
 			memory_apertures: vec![

@@ -11,7 +11,7 @@ pub struct State {
 }
 impl Default for State {
 	fn default() -> State {
-		State {
+		return State {
 			state_id: States::Init,
 			previous_state_id: States::Exit,
 			command_text: "Press Enter to begin...".to_string()

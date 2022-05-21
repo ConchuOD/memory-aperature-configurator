@@ -40,6 +40,7 @@ fn display_status<'a, B: tui::backend::Backend>
 		 ]
 		.iter()
 		.map(|h|
+			return
 			Cell::from(*h)
 			.style(
 				Style::default()
@@ -83,9 +84,9 @@ fn display_status<'a, B: tui::backend::Backend>
 
 	let rows = data.iter().map(|item| {
 		let cells = item.iter().map(|c|
-			Cell::from(c.clone())
+			return Cell::from(c.clone())
 		);
-		Row::new(cells).height(1).bottom_margin(1)
+		return Row::new(cells).height(1).bottom_margin(1)
 	});
 
 	let mut output;
