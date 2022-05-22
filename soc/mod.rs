@@ -25,6 +25,8 @@ pub trait Aperture {
 	(&self, total_system_memory: u64) -> Result<u64, SegError>;
 	fn set_hw_start_addr
 	(&mut self, total_system_memory: u64, new_start_addr: u64) -> Result<(), SegError>;
+	fn set_hw_start_addr_from_seg
+	(&mut self, total_system_memory: u64, seg_value: u64) -> Result<(), SegError>;
 }
 
 #[derive(Debug)]
@@ -70,6 +72,12 @@ impl Aperture for MemoryAperture {
 		} else {
 			return Err(SegError {})
 		}
+	}
+	fn set_hw_start_addr_from_seg
+	(&mut self, total_system_memory: u64, seg_value: u64) -> Result<(), SegError>
+	{
+		let new_start_addr = seg_to_hw_start_addr(seg_value, self.bus_addr);
+		self.set_hw_start_addr(total_system_memory, new_start_addr)
 	}
 }
 
