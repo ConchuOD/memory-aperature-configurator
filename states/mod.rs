@@ -91,7 +91,7 @@ fn wait_for_input_handler
 		let aperature_id_trimmed = aperature_id_raw.trim_start_matches("0x");
 		let aperature_id = u64::from_str_radix(aperature_id_trimmed, 16);
 		if aperature_id.is_err() {
-			println!("Invalid address. Please enter a hex number");
+			next_state.command_text = format!("Invalid address. Please enter a hex number");
 			next_state.state_id = States::SelectOperation;
 			return next_state;
 		}
@@ -113,16 +113,15 @@ fn wait_for_input_handler
 		let addr_trimmed = addr_raw.trim_start_matches("0x");
 		let addr = u64::from_str_radix(addr_trimmed, 16);
 		if addr.is_err() {
-			println!("Invalid address. Please enter a hex number");
+			next_state.command_text = format!("Invalid address. Please enter a hex number");
 			next_state.state_id = States::SelectOperation;
 			return next_state;
 		}
 
 		let current_aperture_id = board.current_aperture_id.unwrap();
 		if board.set_hw_start_addr_by_id(addr.unwrap(), current_aperture_id).is_err() {
-			println!(
-				"Failed setting hardware start address: requested address was \
-				greater than the total system memory.\n\
+			next_state.command_text = format!(
+				"Hardware start address was greater than the total system memory.\n\
 				Try again - please enter a new hex number:"
 			);
 			next_state.state_id = current_state.state_id;
