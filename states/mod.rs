@@ -121,8 +121,8 @@ fn wait_for_input_handler
 		let current_aperture_id = board.current_aperture_id.unwrap();
 		if board.set_hw_start_addr_by_id(addr.unwrap(), current_aperture_id).is_err() {
 			next_state.command_text = format!(
-				"Hardware start address was greater than the total system memory.\n\
-				Try again - please enter a new hex number:"
+				"Hardware start address was greater than the total system memory. \
+				Please enter a new hex number:"
 			);
 			next_state.state_id = current_state.state_id;
 			next_state.previous_state_id = States::SelectOperation;

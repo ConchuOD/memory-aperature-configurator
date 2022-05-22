@@ -40,8 +40,8 @@ const READABLE_COLOURS: [Color; 6] =
 	Color::LightBlue
 ];
 
-fn display_status<'a, B: tui::backend::Backend>
-(board: &mut soc::MPFS, frame:&mut Frame<B>, display_rect: Rect)
+fn render_table<'a, B: tui::backend::Backend>
+(data: Vec<Vec<String>>, frame:&mut Frame<B>, display_rect: Rect)
 {
 	let selected_style = Style::default().add_modifier(Modifier::REVERSED);
 	let normal_style = Style::default().bg(Color::Blue);
@@ -62,11 +62,141 @@ fn display_status<'a, B: tui::backend::Backend>
 				.bg(Color::Black)
 			)
 		);
-	let header =
-		Row::new(header_cells).height(1).bottom_margin(1);
-	
-	let mut data: Vec<Vec<String>> = Vec::new();
+
+	let header = Row::new(header_cells).height(1).bottom_margin(1);
+	let rows = data.iter().map(|item| {
+		let cells = item.iter().map(|c|
+			return Cell::from(c.clone())
+		);
+		return Row::new(cells).height(1).bottom_margin(1)
+	});
+
+	let table =
+		Table::new(rows)
+		.header(header)
+		.block(
+			Block::default()
+			.borders(Borders::ALL)
+
+		)
+		.style(
+			Style::default()
+			.fg(Color::White)
+			.bg(Color::Black)
+		)
+		.highlight_style(selected_style)
+		.highlight_symbol(">> ")
+		.widths(&[
+			Constraint::Percentage(5),
+			Constraint::Percentage(10),
+			Constraint::Percentage(15),
+			Constraint::Percentage(12),
+			Constraint::Percentage(8),
+			Constraint::Percentage(12),
+			Constraint::Percentage(12),
+			Constraint::Percentage(12),
+		]);
+
+	frame.render_widget(table, display_rect);
+}
+
+fn render_visualisation<B: tui::backend::Backend>
+(board: &mut soc::MPFS, frame:&mut Frame<B>, display_rect: Rect)
+{
+	let border: f64 = 0.5;
+	let mem_map_height: f64 = (display_rect.height) as f64 - 2.0 * border;
+	let mem_map_width = 0.67 * (display_rect.width) as f64 - 2.0 * border;
+	let mem_map_x = 1.0;
+	let mem_map_y = 0.5;
+	let px_per_byte: f64 = mem_map_height / board.total_system_memory as f64;
+
+	let mut aperature_colours = READABLE_COLOURS.iter();
+
+	let memory_map = Rectangle {
+		x: mem_map_x,
+		y: mem_map_y,
+		width: mem_map_width,
+		height: mem_map_height,
+		color: Color::White,
+	};
+
+	let memory_apertures = board.memory_apertures.iter();
+	let mut aperatures: Vec<Rectangle> = Vec::new();
+	let num_apertures = 6.0;
+	let aperature_width = mem_map_width / (num_apertures + 1.0);
+	let mut display_offset = aperature_width / num_apertures;
+	for aperature in memory_apertures {
+		let aperature_start = aperature.get_hw_start_addr(board.total_system_memory);
+		let aperature_end = aperature.get_hw_end_addr(board.total_system_memory);
+		let colour = *aperature_colours.next().unwrap(); // yeah, yeah this could crash
+
+		if aperature_start.is_ok() && aperature_end.is_ok() {
+			let aperture_y: f64 = px_per_byte * aperature_start.unwrap() as f64;
+			let aperture_height: f64 = px_per_byte * aperature_end.unwrap() as f64
+						   - aperture_y;
+			let rectangle = Rectangle {
+				x: mem_map_x + display_offset,
+				y: mem_map_y + aperture_y,
+				width: aperature_width,
+				height: aperture_height,
+				color: colour,
+			};
+			aperatures.push(rectangle.clone());
+		}
+		display_offset += aperature_width + aperature_width / num_apertures;
+	}
+
+	let canvas =
+		Canvas::default()
+		.block(
+			Block::default()
+			.borders(Borders::ALL)
+			.title(format!(
+				"System memory available: {:#010x?} ({} MiB)",
+				board.total_system_memory,
+				hex_to_mib(board.total_system_memory)
+				)
+			)
+		)
+		.paint(|ctx| {
+				ctx.draw(&memory_map);
+
+				let mut remove_me: u64 = 0;
+				for rectangle in &aperatures {
+					ctx.draw(rectangle);
+					ctx.print(
+						rectangle.x + 0.5 * rectangle.width,
+						mem_map_y - 0.5,
+						Span::styled(format!("{}", remove_me),
+						Style::default().fg(Color::White)),
+					);
+					remove_me += 1;
+				}
+				ctx.print(
+					mem_map_x + mem_map_width + 1.25,
+					mem_map_y - 0.5,
+					Span::styled(format!("{:#010x?}", 0_u64),
+					Style::default().fg(Color::White)),
+				);
+				ctx.print(
+					mem_map_x + mem_map_width + 1.25,
+					mem_map_y + mem_map_height,
+					Span::styled(format!("{:#010x?}",
+							     board.total_system_memory),
+					Style::default().fg(Color::White)),
+				);
+			}
+		)
+		.x_bounds([0.0, display_rect.width as f64])
+		.y_bounds([0.0, display_rect.height as f64]);
+
+	frame.render_widget(canvas, display_rect);
+}
+
+fn format_table_data(board: &mut soc::MPFS) -> (Vec<Vec<String>>, Result<(), ()>)
+{
 	let mut config_is_valid: bool = true;
+	let mut data: Vec<Vec<String>> = Vec::new();
 
 	for memory_aperture in &board.memory_apertures {
 		let aperature_start = memory_aperture.get_hw_start_addr(board.total_system_memory);
@@ -103,15 +233,20 @@ fn display_status<'a, B: tui::backend::Backend>
 		data.push(row_cells.clone());
 	}
 
-	let rows = data.iter().map(|item| {
-		let cells = item.iter().map(|c|
-			return Cell::from(c.clone())
-		);
-		return Row::new(cells).height(1).bottom_margin(1)
-	});
-
-	let mut output;
 	if config_is_valid {
+		return (data, Ok(()))
+	}
+	else {
+		return (data, Err(()))
+	}
+}
+
+fn render_seg_regs<T, G, B: tui::backend::Backend>
+(board: &mut soc::MPFS, config_is_valid: Result<T,G>, frame:&mut Frame<B>, display_rect: Rect)
+{
+	let mut output;
+
+	if config_is_valid.is_ok() {
 		output = format!("seg-reg-config: {{ ").to_owned();
 		for memory_aperture in &board.memory_apertures {
 			output += &format!(
@@ -125,19 +260,7 @@ fn display_status<'a, B: tui::backend::Backend>
 	} else {
 		output = format!("Cannot calculate seg registers, configuration is invalid.");
 	}
-
-	let chunks =
-		Layout::default()
-		.direction(Direction::Vertical)
-		.constraints(
-		[
-			Constraint::Percentage(85),
-			Constraint::Percentage(15),
-		]
-		.as_ref(),
-		)
-		.split(display_rect);
-
+	
 	let segs =
 		Paragraph::new(output)
 		.block(
@@ -150,118 +273,43 @@ fn display_status<'a, B: tui::backend::Backend>
 			.bg(Color::Black)
 		);
 
-	let table =
-		Table::new(rows)
-		.header(header)
-		.block(
-			Block::default()
-			.borders(Borders::ALL)
-			.title(format!(
-				"System memory available: {:#010x?} ({} MiB)",
-				board.total_system_memory,
-				hex_to_mib(board.total_system_memory)
-				)
-			)
-		)
-		.style(
-			Style::default()
-			.fg(Color::White)
-			.bg(Color::Black)
-		)
-		.highlight_style(selected_style)
-		.highlight_symbol(">> ")
-		.widths(&[
-			Constraint::Percentage(5),
-			Constraint::Percentage(10),
-			Constraint::Percentage(15),
-			Constraint::Percentage(12),
-			Constraint::Percentage(8),
-			Constraint::Percentage(12),
-			Constraint::Percentage(12),
-			Constraint::Percentage(12),
-		]);
-
-	frame.render_widget(table, chunks[0]);
-	frame.render_widget(segs, chunks[1]);
+	frame.render_widget(segs, display_rect);
 }
 
-fn display_visualisation<B: tui::backend::Backend>
+fn render_display<B: tui::backend::Backend>
 (board: &mut soc::MPFS, frame:&mut Frame<B>, display_rect: Rect)
 {
-	let border: f64 = 0.5;
-	let mem_map_height: f64 = (display_rect.height) as f64 - 2.0 * border;
-	let mem_map_width = 0.67 * (display_rect.width) as f64 - 2.0 * border;
-	let mem_map_x = 1.0;
-	let mem_map_y = 0.5;
-	let px_per_byte: f64 = mem_map_height / board.total_system_memory as f64;
-
-	let mut aperature_colours = READABLE_COLOURS.iter();
-
-	let memory_map = Rectangle {
-		x: mem_map_x,
-		y: mem_map_y,
-		width: mem_map_width,
-		height: mem_map_height,
-		color: Color::White,
-	};
-
-	let memory_apertures = board.memory_apertures.iter();
-	let mut aperatures: Vec<Rectangle> = Vec::new();
-	let num_apertures = 6.0;
-	let aperature_width = mem_map_width / (num_apertures + 1.0);
-	let mut display_offset = aperature_width / num_apertures;
-	for aperature in memory_apertures {
-		let aperature_start = aperature.get_hw_start_addr(board.total_system_memory);
-		let aperature_end = aperature.get_hw_end_addr(board.total_system_memory);
-
-		if aperature_start.is_ok() && aperature_end.is_ok() {
-			let aperture_y: f64 = px_per_byte * aperature_start.unwrap() as f64;
-			let aperture_height: f64 = px_per_byte * aperature_end.unwrap() as f64
-						    - aperture_y;
-			let rectangle = Rectangle {
-				x: mem_map_x + display_offset,
-				y: mem_map_y + aperture_y,
-				width: aperature_width,
-				height: aperture_height,
-				color: *aperature_colours.next().unwrap(), //TODO fix incrementing in failure case
-			};
-			aperatures.push(rectangle.clone());
-		}
-		display_offset += aperature_width + aperature_width / num_apertures;
-	}
-
-	let canvas =
-		Canvas::default()
-		.block(Block::default().borders(Borders::ALL).title("Memory Map"))
-		.paint(|ctx| {
-				ctx.draw(&memory_map);
-
-				let mut remove_me: u64 = 0;
-				for rectangle in &aperatures {
-					ctx.draw(rectangle);
-					ctx.print(
-						rectangle.x + 0.5 * rectangle.width,
-						mem_map_y - 0.5,
-						Span::styled(format!("{}", remove_me), Style::default().fg(Color::White)),
-					);
-					remove_me += 1;
-				}
-				ctx.print(
-					mem_map_x + mem_map_width + 1.25,
-					mem_map_y - 0.5,
-					Span::styled(format!("{:#010x?}", 0_u64), Style::default().fg(Color::White)),
-				);
-				ctx.print(
-					mem_map_x + mem_map_width + 1.25,
-					mem_map_y + mem_map_height,
-					Span::styled(format!("{:#010x?}", board.total_system_memory), Style::default().fg(Color::White)),
-				);
-			}
+	let chunks =
+		Layout::default()
+		.direction(Direction::Vertical)
+		.constraints(
+		[
+			Constraint::Percentage(85),
+			Constraint::Percentage(15),
+		]
+		.as_ref(),
 		)
-		.x_bounds([0.0, display_rect.width as f64])
-		.y_bounds([0.0, display_rect.height as f64]);
+		.split(display_rect);
 
-	frame.render_widget(canvas, display_rect);
+	let display_area = 
+		Layout::default()
+		.direction(Direction::Horizontal)
+		.constraints(
+		[
+			Constraint::Percentage(33),
+			Constraint::Percentage(67),
+		]
+		.as_ref(),
+		)
+		.split(chunks[0]);
+
+	let (data, config_is_valid) = format_table_data(board);
+
+	render_seg_regs(board, config_is_valid, frame, chunks[1]);
+
+	render_table(data, frame, display_area[1]);
+
+	render_visualisation(board, frame, display_area[0]);
 }
 
 fn main() -> Result<(), io::Error> {
@@ -291,22 +339,8 @@ fn main() -> Result<(), io::Error> {
 				)
 				.split(frame.size());
 			
-			let display_area = 
-				Layout::default()
-				.direction(Direction::Horizontal)
-				.constraints(
-				[
-					Constraint::Percentage(33),
-					Constraint::Percentage(67),
-				]
-				.as_ref(),
-				)
-				.split(entire_window[0]);
+			render_display(&mut board, frame, entire_window[0]);
 
-			display_status(&mut board, frame, display_area[1]);
-
-			display_visualisation(&mut board, frame, display_area[0]);
-			
 			let txt = format!("{}\n{}", command_text, input);
 			
 			let graph =
