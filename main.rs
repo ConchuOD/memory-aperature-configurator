@@ -7,6 +7,7 @@
 
 use std::io;
 use std::time::Duration;
+use std::fs;
 use tui::{
 	backend::{CrosstermBackend},
 	layout::{Constraint, Direction, Layout, Rect},
@@ -20,6 +21,7 @@ use crossterm::{
 	event::{self, Event, KeyCode},
 	terminal::{disable_raw_mode, enable_raw_mode},
 };
+use yaml_rust::yaml::YamlLoader;
 
 mod soc;
 use crate::soc::Aperture;
@@ -312,6 +314,25 @@ fn render_display<B: tui::backend::Backend>
 	render_visualisation(board, frame, display_area[0]);
 }
 
+fn setup_segs_from_config(board: &mut soc::MPFS, doc: &yaml_rust::yaml::Yaml)
+// -> Result<(), Box<dyn std::error::Error>>
+{
+	let seg_config = &doc["seg-reg-config"];
+	if *seg_config != yaml_rust::yaml::Yaml::BadValue {
+		let apertures = board.memory_apertures.iter_mut();
+		for aperture in apertures {
+			let seg_name = aperture.reg_name.as_str();
+			let seg_string = seg_config[seg_name].clone();
+			println!("{:?}", seg_string.as_str().unwrap());
+			let seg_string_raw = seg_string.as_str().unwrap();
+			let seg_string_trimmed = seg_string_raw.trim_start_matches("0x");
+			let seg = u64::from_str_radix(seg_string_trimmed, 16);
+			if seg.is_ok(){
+				aperture.set_hw_start_addr_from_seg(board.total_system_memory, seg.unwrap());
+			}
+		}
+	}
+}
 fn main() -> Result<(), io::Error> {
 	let mut next_state = states::State::default();
 	let mut board = soc::MPFS::default();
@@ -320,14 +341,22 @@ fn main() -> Result<(), io::Error> {
 	let mut terminal = Terminal::new(backend)?;
 	let mut input: String = String::new();
 	let mut messages: Vec<String> = Vec::new();
+	let filename = "config.yaml";
 
+	let contents = fs::read_to_string(filename);
+	if contents.is_ok() {
+		let doc = &YamlLoader::load_from_str(&contents.unwrap()).unwrap()[0];
+		setup_segs_from_config(&mut board, doc);
+	}
+
+	terminal.clear()?;
 	enable_raw_mode()?;
 	terminal.clear()?;
 
 	loop {
 		let command_text = next_state.command_text.clone();
 		terminal.draw(|frame| {
-			let entire_window = 
+			let entire_window =
 				Layout::default()
 				.direction(Direction::Vertical)
 				.constraints(

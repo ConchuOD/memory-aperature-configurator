@@ -9,7 +9,8 @@ edition = "2021"
 text_io = "0.1.10"
 crossterm = "0.23"
 tui = { version = "0.17", features = ["termion"] }
-failure = "0.1"
+yaml-rust = "0.4"
+
 
 [[bin]]
 name = "seg-configurator"
