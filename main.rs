@@ -145,8 +145,10 @@ fn display_status<'a, B: tui::backend::Backend>
 			Block::default()
 			.borders(Borders::ALL)
 			.title(format!(
-				"System memory available: {:#012x?}",
-				board.total_system_memory)
+				"System memory available: {:#012x?} ({} MiB)",
+				board.total_system_memory,
+				hex_to_mib(board.total_system_memory)
+				)
 			)
 		)
 		.style(
