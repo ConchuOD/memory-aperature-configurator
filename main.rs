@@ -35,8 +35,10 @@ fn display_status<'a, B: tui::backend::Backend>
 	let normal_style = Style::default().bg(Color::Blue);
 	let header_cells =
 		[
-			"ID", "Register", "Description", "Bus Address",
-			"Aperture HW Start", "Aperture HW End", "Aperature Size",
+			"ID", "Register Name", "Description", "Bus Address",
+			"Register Value", "Aperture HW Start", "Aperture HW End",
+			"Aperature Size",
+			
 		 ]
 		.iter()
 		.map(|h|
@@ -67,6 +69,7 @@ fn display_status<'a, B: tui::backend::Backend>
 		if aperature_start.is_err() || aperature_end.is_err() {
 			row_cells.push("invalid".to_string());
 			row_cells.push("invalid".to_string());
+			row_cells.push("invalid".to_string());
 			row_cells.push("n/a MiB".to_string());
 			config_is_valid = false;
 		} else {
@@ -74,6 +77,12 @@ fn display_status<'a, B: tui::backend::Backend>
 			let end = aperature_end.as_ref().unwrap();
 			let size = end - start;
 
+			row_cells.push(
+				format!("{:#04x?}",
+					soc::hw_start_addr_to_seg(*start,
+					memory_aperture.bus_addr)
+					)
+				);
 			row_cells.push(format!("{:#012x?}", start));
 			row_cells.push(format!("{:#012x?}", end));
 			row_cells.push(format!("{} MiB", hex_to_mib(size)));
@@ -149,9 +158,10 @@ fn display_status<'a, B: tui::backend::Backend>
 		.highlight_symbol(">> ")
 		.widths(&[
 			Constraint::Percentage(5),
-			Constraint::Percentage(5),
-			Constraint::Percentage(25),
+			Constraint::Percentage(10),
+			Constraint::Percentage(15),
 			Constraint::Percentage(12),
+			Constraint::Percentage(8),
 			Constraint::Percentage(12),
 			Constraint::Percentage(12),
 			Constraint::Percentage(12),
