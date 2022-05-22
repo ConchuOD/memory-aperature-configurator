@@ -117,32 +117,18 @@ impl Default for MPFS {
 			current_aperture_id: None,
 			memory_apertures: vec![
 				MemoryAperture {
-					description: "64-bit cached\t".to_string(),
-					reg_name: "seg0_1".to_string(),
-					bus_addr: 0x10_0000_0000,
-					hardware_addr: 0x00_0200_0000,
-					aperture_size: 0x40_0000_0000,
-				},
-				MemoryAperture {
-					description: "64-bit non-cached".to_string(),
-					reg_name: "seg1_3".to_string(),
-					bus_addr: 0x14_0000_0000,
-					hardware_addr: 0x0,
-					aperture_size: 0x4000_0000,
-				},
-				MemoryAperture {
-					description: "64-bit WCB\t".to_string(),
-					reg_name: "seg1_5".to_string(),
-					bus_addr: 0x18_0000_0000,
-					hardware_addr: 0x0,
-					aperture_size: 0x4000_0000,
-				},
-				MemoryAperture {
 					description: "32-bit cached\t".to_string(),
 					reg_name: "seg0_0".to_string(),
 					bus_addr: 0x8000_0000,
 					hardware_addr: 0x0,
 					aperture_size: 0x4000_0000,
+				},
+				MemoryAperture {
+					description: "64-bit cached\t".to_string(),
+					reg_name: "seg0_1".to_string(),
+					bus_addr: 0x10_0000_0000,
+					hardware_addr: 0x00_0200_0000,
+					aperture_size: 0x40_0000_0000,
 				},
 				MemoryAperture {
 					description: "32-bit non-cached".to_string(),
@@ -152,12 +138,26 @@ impl Default for MPFS {
 					aperture_size: 0x1000_0000,
 				},
 				MemoryAperture {
+					description: "64-bit non-cached".to_string(),
+					reg_name: "seg1_3".to_string(),
+					bus_addr: 0x14_0000_0000,
+					hardware_addr: 0x0,
+					aperture_size: 0x4000_0000,
+				},
+				MemoryAperture {
 					description: "32-bit WCB\t".to_string(),
 					reg_name: "seg1_4".to_string(),
 					bus_addr: 0xD000_0000,
 					hardware_addr: 0x0,
 					aperture_size: 0x1000_0000,
-				}
+				},
+				MemoryAperture {
+					description: "64-bit WCB\t".to_string(),
+					reg_name: "seg1_5".to_string(),
+					bus_addr: 0x18_0000_0000,
+					hardware_addr: 0x0,
+					aperture_size: 0x4000_0000,
+				},
 			]
 		}
 	}
