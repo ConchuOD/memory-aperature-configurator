@@ -77,7 +77,7 @@ impl Aperture for MemoryAperture {
 	(&mut self, total_system_memory: u64, seg_value: u64) -> Result<(), SegError>
 	{
 		let new_start_addr = seg_to_hw_start_addr(seg_value, self.bus_addr);
-		self.set_hw_start_addr(total_system_memory, new_start_addr)
+		return self.set_hw_start_addr(total_system_memory, new_start_addr)
 	}
 }
 
