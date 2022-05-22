@@ -12,7 +12,9 @@ use tui::{
 	layout::{Constraint, Direction, Layout, Rect},
 	style::{Color, Modifier, Style},
 	widgets::{Block, Borders, Paragraph, Cell, Row, Table},
+	widgets::canvas::{Canvas, Rectangle},
 	Frame, Terminal,
+	text::Span
 };
 use crossterm::{
 	event::{self, Event, KeyCode},
@@ -27,6 +29,16 @@ fn hex_to_mib(hex: u64) -> u64
 {
 	return hex / (2_u64.pow(10).pow(2))
 }
+
+const READABLE_COLOURS: [Color; 6] =
+[
+	Color::LightRed,
+	Color::LightGreen,
+	Color::LightMagenta,
+	Color::LightYellow,
+	Color::LightCyan,
+	Color::LightBlue
+];
 
 fn display_status<'a, B: tui::backend::Backend>
 (board: &mut soc::MPFS, frame:&mut Frame<B>, display_rect: Rect)
@@ -145,7 +157,7 @@ fn display_status<'a, B: tui::backend::Backend>
 			Block::default()
 			.borders(Borders::ALL)
 			.title(format!(
-				"System memory available: {:#012x?} ({} MiB)",
+				"System memory available: {:#010x?} ({} MiB)",
 				board.total_system_memory,
 				hex_to_mib(board.total_system_memory)
 				)
@@ -171,6 +183,85 @@ fn display_status<'a, B: tui::backend::Backend>
 
 	frame.render_widget(table, chunks[0]);
 	frame.render_widget(segs, chunks[1]);
+}
+
+fn display_visualisation<B: tui::backend::Backend>
+(board: &mut soc::MPFS, frame:&mut Frame<B>, display_rect: Rect)
+{
+	let border: f64 = 0.5;
+	let mem_map_height: f64 = (display_rect.height) as f64 - 2.0 * border;
+	let mem_map_width = 0.67 * (display_rect.width) as f64 - 2.0 * border;
+	let mem_map_x = 1.0;
+	let mem_map_y = 0.5;
+	let px_per_byte: f64 = mem_map_height / board.total_system_memory as f64;
+
+	let mut aperature_colours = READABLE_COLOURS.iter();
+
+	let memory_map = Rectangle {
+		x: mem_map_x,
+		y: mem_map_y,
+		width: mem_map_width,
+		height: mem_map_height,
+		color: Color::White,
+	};
+
+	let memory_apertures = board.memory_apertures.iter();
+	let mut aperatures: Vec<Rectangle> = Vec::new();
+	let num_apertures = 6.0;
+	let aperature_width = mem_map_width / (num_apertures + 1.0);
+	let mut display_offset = aperature_width / num_apertures;
+	for aperature in memory_apertures {
+		let aperature_start = aperature.get_hw_start_addr(board.total_system_memory);
+		let aperature_end = aperature.get_hw_end_addr(board.total_system_memory);
+
+		if aperature_start.is_ok() && aperature_end.is_ok() {
+			let aperture_y: f64 = px_per_byte * aperature_start.unwrap() as f64;
+			let aperture_height: f64 = px_per_byte * aperature_end.unwrap() as f64
+						    - aperture_y;
+			let rectangle = Rectangle {
+				x: mem_map_x + display_offset,
+				y: mem_map_y + aperture_y,
+				width: aperature_width,
+				height: aperture_height,
+				color: *aperature_colours.next().unwrap(), //TODO fix incrementing in failure case
+			};
+			aperatures.push(rectangle.clone());
+		}
+		display_offset += aperature_width + aperature_width / num_apertures;
+	}
+
+	let canvas =
+		Canvas::default()
+		.block(Block::default().borders(Borders::ALL).title("Memory Map"))
+		.paint(|ctx| {
+				ctx.draw(&memory_map);
+
+				let mut remove_me: u64 = 0;
+				for rectangle in &aperatures {
+					ctx.draw(rectangle);
+					ctx.print(
+						rectangle.x + 0.5 * rectangle.width,
+						mem_map_y - 0.5,
+						Span::styled(format!("{}", remove_me), Style::default().fg(Color::White)),
+					);
+					remove_me += 1;
+				}
+				ctx.print(
+					mem_map_x + mem_map_width + 1.25,
+					mem_map_y - 0.5,
+					Span::styled(format!("{:#010x?}", 0_u64), Style::default().fg(Color::White)),
+				);
+				ctx.print(
+					mem_map_x + mem_map_width + 1.25,
+					mem_map_y + mem_map_height,
+					Span::styled(format!("{:#010x?}", board.total_system_memory), Style::default().fg(Color::White)),
+				);
+			}
+		)
+		.x_bounds([0.0, display_rect.width as f64])
+		.y_bounds([0.0, display_rect.height as f64]);
+
+	frame.render_widget(canvas, display_rect);
 }
 
 fn main() -> Result<(), io::Error> {
@@ -213,6 +304,8 @@ fn main() -> Result<(), io::Error> {
 				.split(entire_window[0]);
 
 			display_status(&mut board, frame, display_area[1]);
+
+			display_visualisation(&mut board, frame, display_area[0]);
 			
 			let txt = format!("{}\n{}", command_text, input);
 			
