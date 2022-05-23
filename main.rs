@@ -102,6 +102,25 @@ fn render_table<'a, B: tui::backend::Backend>
 	frame.render_widget(table, display_rect);
 }
 
+#[derive(Clone)]
+struct ApertureVis {
+	rectangle: Option<Rectangle>,
+	label: Option<char>,
+	label_x: f64,
+	label_y: f64
+}
+
+impl Default for ApertureVis {
+	fn default() -> ApertureVis {
+		return ApertureVis {
+			rectangle: None,
+			label: None,
+			label_x: 0.0,
+			label_y: 0.0
+		}
+	}
+}
+
 fn render_visualisation<B: tui::backend::Backend>
 (board: &mut soc::MPFS, frame:&mut Frame<B>, display_rect: Rect)
 {
@@ -123,7 +142,7 @@ fn render_visualisation<B: tui::backend::Backend>
 	};
 
 	let memory_apertures = board.memory_apertures.iter();
-	let mut aperatures: Vec<Rectangle> = Vec::new();
+	let mut apertures: Vec<ApertureVis> = Vec::new();
 	let num_apertures = 6.0;
 	let aperature_width = mem_map_width / (num_apertures + 1.0);
 	let mut display_offset = aperature_width / num_apertures;
@@ -131,20 +150,28 @@ fn render_visualisation<B: tui::backend::Backend>
 		let aperature_start = aperature.get_hw_start_addr(board.total_system_memory);
 		let aperature_end = aperature.get_hw_end_addr(board.total_system_memory);
 		let colour = *aperature_colours.next().unwrap(); // yeah, yeah this could crash
+		let mut aperture_vis: ApertureVis = ApertureVis::default();
+		aperture_vis.label = aperature.reg_name.chars().last().clone();
+
+		let rectangle_x = mem_map_x + display_offset;
+
+		aperture_vis.label_x = rectangle_x + 0.5 * aperature_width;
+		aperture_vis.label_y = mem_map_y - 0.5;
 
 		if aperature_start.is_ok() && aperature_end.is_ok() {
 			let aperture_y: f64 = px_per_byte * aperature_start.unwrap() as f64;
 			let aperture_height: f64 = px_per_byte * aperature_end.unwrap() as f64
 						   - aperture_y;
 			let rectangle = Rectangle {
-				x: mem_map_x + display_offset,
+				x: rectangle_x,
 				y: mem_map_y + aperture_y,
 				width: aperature_width,
 				height: aperture_height,
 				color: colour,
 			};
-			aperatures.push(rectangle.clone());
+			aperture_vis.rectangle = Some(rectangle);
 		}
+		apertures.push(aperture_vis.clone());
 		display_offset += aperature_width + aperature_width / num_apertures;
 	}
 
@@ -163,17 +190,29 @@ fn render_visualisation<B: tui::backend::Backend>
 		.paint(|ctx| {
 				ctx.draw(&memory_map);
 
-				let mut remove_me: u64 = 0;
-				for rectangle in &aperatures {
-					ctx.draw(rectangle);
+				for aperture in &apertures {
+					if aperture.label.is_none(){
+						continue;
+					}
+
 					ctx.print(
-						rectangle.x + 0.5 * rectangle.width,
-						mem_map_y - 0.5,
-						Span::styled(format!("{}", remove_me),
-						Style::default().fg(Color::White)),
+						aperture.label_x,
+						aperture.label_y,
+						Span::styled(
+							format!("{}",
+								aperture.label.as_ref().unwrap()
+							),
+							Style::default().fg(Color::White)
+						)
 					);
-					remove_me += 1;
+
+					if aperture.rectangle.is_none() {
+						continue;
+					}
+
+					ctx.draw(aperture.rectangle.as_ref().unwrap());
 				}
+
 				ctx.print(
 					mem_map_x + mem_map_width + 1.25,
 					mem_map_y - 0.5,
