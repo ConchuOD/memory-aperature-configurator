@@ -354,7 +354,7 @@ fn render_display<B: tui::backend::Backend>
 }
 
 fn setup_segs_from_config(board: &mut soc::MPFS, doc: &yaml_rust::yaml::Yaml)
-// -> Result<(), Box<dyn std::error::Error>>
+-> Result<(), Box<dyn std::error::Error>>
 {
 	let seg_config = &doc["seg-reg-config"];
 	if *seg_config != yaml_rust::yaml::Yaml::BadValue {
@@ -362,15 +362,37 @@ fn setup_segs_from_config(board: &mut soc::MPFS, doc: &yaml_rust::yaml::Yaml)
 		for aperture in apertures {
 			let seg_name = aperture.reg_name.as_str();
 			let seg_string = seg_config[seg_name].clone();
-			println!("{:?}", seg_string.as_str().unwrap());
 			let seg_string_raw = seg_string.as_str().unwrap();
 			let seg_string_trimmed = seg_string_raw.trim_start_matches("0x");
-			let seg = u64::from_str_radix(seg_string_trimmed, 16);
-			if seg.is_ok(){
-				aperture.set_hw_start_addr_from_seg(board.total_system_memory, seg.unwrap());
-			}
+			let seg = u64::from_str_radix(seg_string_trimmed, 16)?;
+			aperture.set_hw_start_addr_from_seg(
+				board.total_system_memory,
+				seg
+			)?;
 		}
+		return Ok(());
 	}
+	return Ok(())
+}
+
+fn handle_messages(messages: &mut Vec<String>) -> Option<String>
+{
+	if messages.is_empty(){
+		return None;
+	}
+
+	let message = messages.pop();
+	messages.clear();
+	if message.is_none() {
+		return None;
+	}
+
+	if message.as_ref().unwrap().contains("save") {
+		return None;
+	}
+
+	let input = message.as_ref().unwrap();
+	return Some(input.to_string());
 }
 
 use clap::Parser;
@@ -474,24 +496,4 @@ fn main() -> Result<(), io::Error> {
 		let input = handle_messages(&mut messages);
 		next_state = states::get_next_state(next_state, &mut board, input);
 	}
-}
-
-fn handle_messages(messages: &mut Vec<String>) -> Option<String>
-{
-	if messages.is_empty(){
-		return None;
-	}
-
-	let message = messages.pop();
-	messages.clear();
-	if message.is_none() {
-		return None;
-	}
-
-	if message.as_ref().unwrap().contains("save") {
-		return None;
-	}
-
-	let input = message.as_ref().unwrap();
-	return Some(input.to_string());
 }
