@@ -5,21 +5,22 @@
 #![deny(clippy::implicit_return)]
 #![allow(clippy::needless_return)]
 
+use clap::Parser;
+use crossterm::{
+	event::{self, Event, KeyCode},
+	terminal::{disable_raw_mode, enable_raw_mode},
+};
 use std::{io, process::Output};
 use std::time::Duration;
 use std::fs;
 use tui::{
 	backend::{CrosstermBackend},
+	Frame,
 	layout::{Constraint, Direction, Layout, Rect},
 	style::{Color, Modifier, Style},
+	text::Span, Terminal,
 	widgets::{Block, Borders, Paragraph, Cell, Row, Table},
 	widgets::canvas::{Canvas, Rectangle},
-	Frame, Terminal,
-	text::Span
-};
-use crossterm::{
-	event::{self, Event, KeyCode},
-	terminal::{disable_raw_mode, enable_raw_mode},
 };
 use yaml_rust::yaml::YamlLoader;
 
@@ -394,8 +395,6 @@ fn handle_messages(messages: &mut Vec<String>) -> Option<String>
 	let input = message.as_ref().unwrap();
 	return Some(input.to_string());
 }
-
-use clap::Parser;
 
 /// PolarFire SoC memory aperture configurator
 #[derive(Parser, Debug)]
