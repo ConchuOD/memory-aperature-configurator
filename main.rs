@@ -237,36 +237,37 @@ fn render_visualisation<B: tui::backend::Backend>
 
 fn format_table_data(board: &mut soc::MPFS) -> (Vec<Vec<String>>, Result<(), ()>)
 {
-	let mut config_is_valid: bool = true;
+	let mut config_is_valid: Vec<bool> = Vec::new();
 	let mut data: Vec<Vec<String>> = Vec::new();
 
 	for memory_aperture in &board.memory_apertures {
 		let aperature_start = memory_aperture.get_hw_start_addr(board.total_system_memory);
 		let aperature_end = memory_aperture.get_hw_end_addr(board.total_system_memory);
+
 	
 		let mut row_cells: Vec<String> = Vec::new();
 		row_cells.push(data.len().to_string());
 		row_cells.push(memory_aperture.reg_name.clone());
 		row_cells.push(memory_aperture.description.clone());
 		row_cells.push(format!("{:#012x?}", memory_aperture.bus_addr));
+		row_cells.push(
+			format!("{:#08x?}",
+				soc::hw_start_addr_to_seg(
+					memory_aperture.get_hw_start_addr(u64::MAX).unwrap(),
+					memory_aperture.bus_addr)
+				)
+			);
 
 		if aperature_start.is_err() || aperature_end.is_err() {
 			row_cells.push("invalid".to_string());
 			row_cells.push("invalid".to_string());
-			row_cells.push("invalid".to_string());
 			row_cells.push("n/a MiB".to_string());
-			config_is_valid = false;
+			config_is_valid.push(false);
 		} else {
 			let start = aperature_start.as_ref().unwrap();
 			let end = aperature_end.as_ref().unwrap();
 			let size = end - start;
 
-			row_cells.push(
-				format!("{:#04x?}",
-					soc::hw_start_addr_to_seg(*start,
-					memory_aperture.bus_addr)
-					)
-				);
 			row_cells.push(format!("{:#012x?}", start));
 			row_cells.push(format!("{:#012x?}", end));
 			row_cells.push(format!("{} MiB", hex_to_mib(size)));
@@ -275,7 +276,7 @@ fn format_table_data(board: &mut soc::MPFS) -> (Vec<Vec<String>>, Result<(), ()>
 		data.push(row_cells.clone());
 	}
 
-	if config_is_valid {
+	if config_is_valid.len() != board.memory_apertures.len() {
 		return (data, Ok(()))
 	}
 	else {
@@ -300,7 +301,7 @@ fn render_seg_regs<T, G, B: tui::backend::Backend>
 		}
 		output += &format!("}}\n").to_string();
 	} else {
-		output = format!("Cannot calculate seg registers, configuration is invalid.");
+		output = format!("Cannot calculate seg registers, configuration is invalid as no memory is mapped.");
 	}
 	
 	let segs =
