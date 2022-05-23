@@ -377,6 +377,12 @@ fn setup_segs_from_config(board: &mut soc::MPFS, doc: &yaml_rust::yaml::Yaml)
 	return Ok(())
 }
 
+fn save_segs_to_config(board: &mut soc::MPFS, doc: &yaml_rust::yaml::Yaml)
+-> Result<(), Box<dyn std::error::Error>>
+{
+	return Ok(())
+}
+
 fn handle_messages(messages: &mut Vec<String>) -> Option<String>
 {
 	if messages.is_empty(){
@@ -386,10 +392,6 @@ fn handle_messages(messages: &mut Vec<String>) -> Option<String>
 	let message = messages.pop();
 	messages.clear();
 	if message.is_none() {
-		return None;
-	}
-
-	if message.as_ref().unwrap().contains("save") {
 		return None;
 	}
 
@@ -426,9 +428,10 @@ fn main() -> Result<(), io::Error> {
 	}
 
 	let contents = fs::read_to_string(input_file);
+	let doc: Option<Result<Vec<yaml_rust::Yaml>, yaml_rust::ScanError>> = None;
 	if contents.is_ok() {
-		let doc = &YamlLoader::load_from_str(&contents.unwrap()).unwrap()[0];
-		setup_segs_from_config(&mut board, doc);
+		let doc = Some(YamlLoader::load_from_str(&contents.unwrap()));
+		setup_segs_from_config(&mut board, &doc.unwrap().unwrap()[0]);
 	}
 
 	terminal.clear()?;
@@ -494,6 +497,9 @@ fn main() -> Result<(), io::Error> {
 		}
 
 		let input = handle_messages(&mut messages);
+		// if input.as_ref().unwrap().contains("save") && doc.as_ref().is_some(){
+		// 	save_segs_to_config(&mut board, &doc.clone().unwrap().unwrap()[0]);
+		// }
 		next_state = states::get_next_state(next_state, &mut board, input);
 	}
 }
