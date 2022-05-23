@@ -10,6 +10,7 @@ text_io = "0.1.10"
 crossterm = "0.23"
 tui = { version = "0.17", features = ["termion"] }
 yaml-rust = "0.4"
+clap = { version = "3.1.18", features = ["derive"] }
 
 
 [[bin]]

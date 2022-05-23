@@ -5,7 +5,7 @@
 #![deny(clippy::implicit_return)]
 #![allow(clippy::needless_return)]
 
-use std::io;
+use std::{io, process::Output};
 use std::time::Duration;
 use std::fs;
 use tui::{
@@ -333,7 +333,23 @@ fn setup_segs_from_config(board: &mut soc::MPFS, doc: &yaml_rust::yaml::Yaml)
 		}
 	}
 }
+
+use clap::Parser;
+
+/// PolarFire SoC memory aperture configurator
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+struct Args {
+	/// input yaml config file
+	#[clap(short, long, default_value = "config.yaml")]
+	config: String,
+
+	/// output yaml config file
+	#[clap(short, long)]
+	in_place: bool,
+}
 fn main() -> Result<(), io::Error> {
+	let args = Args::parse();
 	let mut next_state = states::State::default();
 	let mut board = soc::MPFS::default();
 	let stdout = io::stdout();
@@ -341,9 +357,14 @@ fn main() -> Result<(), io::Error> {
 	let mut terminal = Terminal::new(backend)?;
 	let mut input: String = String::new();
 	let mut messages: Vec<String> = Vec::new();
-	let filename = "config.yaml";
+	let input_file = args.config;
+	if args.in_place {
+		let output_file = input_file.clone();
+	} else {
+		let output_file = "generated.yaml";
+	}
 
-	let contents = fs::read_to_string(filename);
+	let contents = fs::read_to_string(input_file);
 	if contents.is_ok() {
 		let doc = &YamlLoader::load_from_str(&contents.unwrap()).unwrap()[0];
 		setup_segs_from_config(&mut board, doc);
