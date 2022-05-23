@@ -66,7 +66,7 @@ impl Aperture for MemoryAperture {
 	fn set_hw_start_addr
 	(&mut self, total_system_memory: u64, new_start_addr: u64) -> Result<(), SegError>
 	{
-		if new_start_addr < total_system_memory {
+		if new_start_addr == self.bus_addr || new_start_addr < total_system_memory {
 			self.hardware_addr = new_start_addr;
 			return Ok(())
 		} else {
