@@ -167,11 +167,10 @@ const STATE_HANDLERS: [fn(State, &mut soc::MPFS, input: Option<String>) -> State
 	exit_handler
 ];
 
-pub fn get_next_state(current_state: State, board: &mut soc::MPFS, input: &mut Vec<String>) -> State 
+pub fn get_next_state(current_state: State, board: &mut soc::MPFS, input: Option<String>) -> State 
 {
 	let state_id = current_state.state_id as usize;
-	let next_state = STATE_HANDLERS[state_id](current_state, board, input.pop());
-	input.clear();
+	let next_state = STATE_HANDLERS[state_id](current_state, board, input);
 
 	return next_state
 }

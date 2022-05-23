@@ -432,6 +432,27 @@ fn main() -> Result<(), io::Error> {
 			}
 		}
 
-		next_state = states::get_next_state(next_state, &mut board, &mut messages);
+		let input = handle_messages(&mut messages);
+		next_state = states::get_next_state(next_state, &mut board, input);
 	}
+}
+
+fn handle_messages(messages: &mut Vec<String>) -> Option<String>
+{
+	if messages.is_empty(){
+		return None;
+	}
+
+	let message = messages.pop();
+	messages.clear();
+	if message.is_none() {
+		return None;
+	}
+
+	if message.as_ref().unwrap().contains("save") {
+		return None;
+	}
+
+	let input = message.as_ref().unwrap();
+	return Some(input.to_string());
 }
