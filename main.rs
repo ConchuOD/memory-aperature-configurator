@@ -436,7 +436,7 @@ struct Args {
 	#[clap(short, long, default_value = "config.yaml")]
 	config: String,
 
-	/// output yaml config file
+	/// edit the config in place rather tha use the default output of "generated.yaml"
 	#[clap(short, long)]
 	in_place: bool,
 }
@@ -484,7 +484,7 @@ fn main() -> Result<(),Box<dyn std::error::Error>> {
 				Paragraph::new(txt)
 				.block(
 					Block::default()
-					.title("Press Esc to quit")
+					.title("Press Esc to quit, enter \"save\" to save.")
 					.borders(Borders::ALL))
 				.style(
 					Style::default()
