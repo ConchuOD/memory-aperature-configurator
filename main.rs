@@ -364,13 +364,15 @@ fn setup_segs_from_config(board: &mut soc::MPFS, doc: &yaml_rust::yaml::Yaml)
 		for aperture in apertures {
 			let seg_name = aperture.reg_name.as_str();
 			let seg_string = seg_config[seg_name].clone();
-			let seg_string_raw = seg_string.as_str().unwrap();
-			let seg_string_trimmed = seg_string_raw.trim_start_matches("0x");
-			let seg = u64::from_str_radix(seg_string_trimmed, 16)?;
-			aperture.set_hw_start_addr_from_seg(
-				board.total_system_memory,
-				seg
-			)?;
+			if seg_string.as_str().is_some() {
+				let seg_string_raw = seg_string.as_str().unwrap();
+				let seg_string_trimmed = seg_string_raw.trim_start_matches("0x");
+				let seg = u64::from_str_radix(seg_string_trimmed, 16)?;
+				aperture.set_hw_start_addr_from_seg(
+					board.total_system_memory,
+					seg
+				)?;
+			}
 		}
 		return Ok(());
 	}
@@ -411,7 +413,7 @@ struct Args {
 	#[clap(short, long)]
 	in_place: bool,
 }
-fn main() -> Result<(), io::Error> {
+fn main() -> Result<(),Box<dyn std::error::Error>> {
 	let args = Args::parse();
 	let mut next_state = states::State::default();
 	let mut board = soc::MPFS::default();
@@ -431,7 +433,7 @@ fn main() -> Result<(), io::Error> {
 	let doc: Option<Result<Vec<yaml_rust::Yaml>, yaml_rust::ScanError>> = None;
 	if contents.is_ok() {
 		let doc = Some(YamlLoader::load_from_str(&contents.unwrap()));
-		setup_segs_from_config(&mut board, &doc.unwrap().unwrap()[0]);
+		setup_segs_from_config(&mut board, &doc.unwrap().unwrap()[0])?;
 	}
 
 	terminal.clear()?;
