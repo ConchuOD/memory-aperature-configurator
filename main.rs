@@ -355,10 +355,25 @@ fn render_display<B: tui::backend::Backend>
 	render_visualisation(board, frame, display_area[0]);
 }
 
-fn setup_segs_from_config(board: &mut soc::MPFS, doc: &yaml_rust::yaml::Yaml)
+fn setup_segs_from_config
+(board: &mut soc::MPFS, doc: Option<Result<Vec<yaml_rust::Yaml>, yaml_rust::ScanError>>)
 -> Result<(), Box<dyn std::error::Error>>
 {
-	let seg_config = &doc["seg-reg-config"];
+	if doc.is_none() {
+		return Ok(())
+	}
+
+	let yaml_doc = doc.unwrap();
+	if yaml_doc.is_err() {
+		return Ok(()) //but its not okay though
+	}
+
+	let config = yaml_doc.unwrap()[0].clone();
+	if config == yaml_rust::yaml::Yaml::BadValue {
+		return Ok(())
+	}
+	let seg_config = &config["seg-reg-config"];
+
 	if *seg_config != yaml_rust::yaml::Yaml::BadValue {
 		let apertures = board.memory_apertures.iter_mut();
 		for aperture in apertures {
@@ -374,12 +389,13 @@ fn setup_segs_from_config(board: &mut soc::MPFS, doc: &yaml_rust::yaml::Yaml)
 				)?;
 			}
 		}
-		return Ok(());
+		return Ok(())
 	}
 	return Ok(())
 }
 
-fn save_segs_to_config(board: &mut soc::MPFS, doc: &yaml_rust::yaml::Yaml)
+fn save_segs_to_config
+(board: &mut soc::MPFS, doc: Option<Result<Vec<yaml_rust::Yaml>, yaml_rust::ScanError>>)
 -> Result<(), Box<dyn std::error::Error>>
 {
 	return Ok(())
@@ -430,10 +446,10 @@ fn main() -> Result<(),Box<dyn std::error::Error>> {
 	}
 
 	let contents = fs::read_to_string(input_file);
-	let doc: Option<Result<Vec<yaml_rust::Yaml>, yaml_rust::ScanError>> = None;
+	let mut doc: Option<Result<Vec<yaml_rust::Yaml>, yaml_rust::ScanError>>;
 	if contents.is_ok() {
-		let doc = Some(YamlLoader::load_from_str(&contents.unwrap()));
-		setup_segs_from_config(&mut board, &doc.unwrap().unwrap()[0])?;
+		doc = Some(YamlLoader::load_from_str(&contents.unwrap()));
+		setup_segs_from_config(&mut board, doc.clone())?;
 	}
 
 	terminal.clear()?;
