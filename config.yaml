@@ -13,7 +13,7 @@ hart-entry-points: {u54_1: '0x80200000', u54_2: '0x80200000', u54_3: '0xB0000000
 #
 # Optionally define the seg register values. If undefined, the values set in Libero will be used.
 #
-seg-reg-config: {seg0_0: '0x7FC0', seg0_1: '0x7002', seg1_2: '0x7FB0', seg1_3: '0x0', seg1_4: '0x7FA0', seg1_5: '0x0', }
+seg-reg-config: {seg0_0: '0x7FC0', seg0_1: '0x7000', seg1_2: '0x7FB0', seg1_3: '0x0', seg1_4: '0x7FA0', seg1_5: '0x0', }
 
 #
 # Finally, we'll define some payloads (source ELF files) that will be placed at certain regions in memory

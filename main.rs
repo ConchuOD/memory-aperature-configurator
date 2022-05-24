@@ -10,6 +10,7 @@ use crossterm::{
 	event::{self, Event, KeyCode},
 	terminal::{disable_raw_mode, enable_raw_mode},
 };
+use serde_yaml::Value;
 use std::{io, process::Output};
 use std::time::Duration;
 use std::fs;
@@ -22,7 +23,6 @@ use tui::{
 	widgets::{Block, Borders, Paragraph, Cell, Row, Table},
 	widgets::canvas::{Canvas, Rectangle},
 };
-use yaml_rust::yaml::YamlLoader;
 
 mod soc;
 use crate::soc::Aperture;
@@ -355,49 +355,60 @@ fn render_display<B: tui::backend::Backend>
 	render_visualisation(board, frame, display_area[0]);
 }
 
-fn setup_segs_from_config
-(board: &mut soc::MPFS, doc: Option<Result<Vec<yaml_rust::Yaml>, yaml_rust::ScanError>>)
+fn setup_segs_from_config(board: &mut soc::MPFS, input_file: String)
 -> Result<(), Box<dyn std::error::Error>>
 {
-	if doc.is_none() {
+	let contents = fs::read_to_string(input_file);
+	if let Err(error) = &contents {
 		return Ok(())
 	}
 
-	let yaml_doc = doc.unwrap();
-	if yaml_doc.is_err() {
-		return Ok(()) //but its not okay though
-	}
+	let d: Value = serde_yaml::from_str(&contents.unwrap())?;
+	let seg_config = d["seg-reg-config"].clone();
 
-	let config = yaml_doc.unwrap()[0].clone();
-	if config == yaml_rust::yaml::Yaml::BadValue {
-		return Ok(())
-	}
-	let seg_config = &config["seg-reg-config"];
-
-	if *seg_config != yaml_rust::yaml::Yaml::BadValue {
-		let apertures = board.memory_apertures.iter_mut();
-		for aperture in apertures {
-			let seg_name = aperture.reg_name.as_str();
-			let seg_string = seg_config[seg_name].clone();
-			if seg_string.as_str().is_some() {
-				let seg_string_raw = seg_string.as_str().unwrap();
-				let seg_string_trimmed = seg_string_raw.trim_start_matches("0x");
-				let seg = u64::from_str_radix(seg_string_trimmed, 16)?;
-				aperture.set_hw_start_addr_from_seg(
-					board.total_system_memory,
-					seg
-				)?;
-			}
+	let apertures = board.memory_apertures.iter_mut();
+	for aperture in apertures {
+		let seg_name = aperture.reg_name.as_str();
+		let seg_string = seg_config[seg_name].clone();
+		if seg_string.as_str().is_some() {
+			let seg_string_raw = seg_string.as_str().unwrap();
+			let seg_string_trimmed = seg_string_raw.trim_start_matches("0x");
+			let seg = u64::from_str_radix(seg_string_trimmed, 16)?;
+			aperture.set_hw_start_addr_from_seg(
+				board.total_system_memory,
+				seg
+			)?;
 		}
-		return Ok(())
 	}
-	return Ok(())
+	return Ok(());
+
 }
 
-fn save_segs_to_config
-(board: &mut soc::MPFS, doc: Option<Result<Vec<yaml_rust::Yaml>, yaml_rust::ScanError>>)
+use std::io::Write;
+fn save_segs_to_config(board: &mut soc::MPFS, input_file: String, output_file: String)
 -> Result<(), Box<dyn std::error::Error>>
 {
+	let contents = fs::read_to_string(input_file);
+	if let Err(error) = contents {
+		return Err(Box::new(error))
+	}
+
+	let mut d: Value = serde_yaml::from_str(&contents.unwrap())?;
+
+	for memory_aperture in &board.memory_apertures {
+		let seg_value = 
+			format!("{:#x?}",
+				 soc::hw_start_addr_to_seg(memory_aperture.hardware_addr,
+							   memory_aperture.bus_addr)
+				);
+		let seg_as_yaml = Value::String(seg_value);
+		d["seg-reg-config"][&memory_aperture.reg_name[..]] = seg_as_yaml;
+	}
+
+	let output = serde_yaml::to_string(&d);
+	let mut file = fs::File::create(output_file)?;
+	file.write(output.unwrap()[..].as_bytes())?;
+
 	return Ok(())
 }
 
@@ -439,18 +450,12 @@ fn main() -> Result<(),Box<dyn std::error::Error>> {
 	let mut input: String = String::new();
 	let mut messages: Vec<String> = Vec::new();
 	let input_file = args.config;
+	let mut output_file = "generated.yaml".to_string();
 	if args.in_place {
-		let output_file = input_file.clone();
-	} else {
-		let output_file = "generated.yaml";
+		output_file = input_file.clone();
 	}
 
-	let contents = fs::read_to_string(input_file);
-	let mut doc: Option<Result<Vec<yaml_rust::Yaml>, yaml_rust::ScanError>>;
-	if contents.is_ok() {
-		doc = Some(YamlLoader::load_from_str(&contents.unwrap()));
-		setup_segs_from_config(&mut board, doc.clone())?;
-	}
+	setup_segs_from_config(&mut board, input_file.clone())?;
 
 	terminal.clear()?;
 	enable_raw_mode()?;
@@ -515,9 +520,13 @@ fn main() -> Result<(),Box<dyn std::error::Error>> {
 		}
 
 		let input = handle_messages(&mut messages);
-		// if input.as_ref().unwrap().contains("save") && doc.as_ref().is_some(){
-		// 	save_segs_to_config(&mut board, &doc.clone().unwrap().unwrap()[0]);
-		// }
+		if let Some(command) = input.clone() {
+			if command.contains("save") {
+				save_segs_to_config(&mut board, input_file.clone(), output_file.clone())?;
+				continue;
+			}
+		}
 		next_state = states::get_next_state(next_state, &mut board, input);
+
 	}
 }
