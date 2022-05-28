@@ -47,7 +47,6 @@ fn render_table<'a, B: tui::backend::Backend>
 (data: Vec<Vec<String>>, frame:&mut Frame<B>, display_rect: Rect)
 {
 	let selected_style = Style::default().add_modifier(Modifier::REVERSED);
-	let normal_style = Style::default().bg(Color::Blue);
 	let header_cells =
 		[
 			"ID", "Register Name", "Description", "Bus Address",
@@ -59,11 +58,7 @@ fn render_table<'a, B: tui::backend::Backend>
 		.map(|h|
 			return
 			Cell::from(*h)
-			.style(
-				Style::default()
-				.fg(Color::White)
-				.bg(Color::Black)
-			)
+			.style(Style::default())
 		);
 
 	let header = Row::new(header_cells).height(1).bottom_margin(1);
@@ -82,11 +77,7 @@ fn render_table<'a, B: tui::backend::Backend>
 			.borders(Borders::ALL)
 
 		)
-		.style(
-			Style::default()
-			.fg(Color::White)
-			.bg(Color::Black)
-		)
+		.style(Style::default())
 		.highlight_style(selected_style)
 		.highlight_symbol(">> ")
 		.widths(&[
@@ -203,7 +194,7 @@ fn render_visualisation<B: tui::backend::Backend>
 							format!("{}",
 								aperture.label.as_ref().unwrap()
 							),
-							Style::default().fg(Color::White)
+							Style::default()
 						)
 					);
 
@@ -218,14 +209,14 @@ fn render_visualisation<B: tui::backend::Backend>
 					mem_map_x + mem_map_width + 1.25,
 					mem_map_y - 0.5,
 					Span::styled(format!("{:#010x?}", 0_u64),
-					Style::default().fg(Color::White)),
+					Style::default()),
 				);
 				ctx.print(
 					mem_map_x + mem_map_width + 1.25,
 					mem_map_y + mem_map_height,
 					Span::styled(format!("{:#010x?}",
 							     board.total_system_memory),
-					Style::default().fg(Color::White)),
+					Style::default()),
 				);
 			}
 		)
@@ -310,11 +301,7 @@ fn render_seg_regs<T, G, B: tui::backend::Backend>
 			Block::default()
 			.title("For insertion into config.yaml:")
 			.borders(Borders::ALL))
-		.style(
-			Style::default()
-			.fg(Color::White)
-			.bg(Color::Black)
-		);
+		.style(Style::default());
 
 	frame.render_widget(segs, display_rect);
 }
@@ -486,11 +473,7 @@ fn main() -> Result<(),Box<dyn std::error::Error>> {
 					Block::default()
 					.title("Press Esc to quit, enter \"save\" to save.")
 					.borders(Borders::ALL))
-				.style(
-					Style::default()
-					.fg(Color::White)
-					.bg(Color::Black)
-				);
+				.style(Style::default());
 
 			frame.render_widget(graph, entire_window[1]);
 		})?;
