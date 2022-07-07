@@ -394,7 +394,7 @@ fn save_segs_to_config(board: &mut soc::MPFS, input_file: String, output_file: S
 
 	let output = serde_yaml::to_string(&d);
 	let mut file = fs::File::create(output_file)?;
-	file.write(output.unwrap()[..].as_bytes())?;
+	file.write_all(output.unwrap()[..].as_bytes())?;
 
 	return Ok(())
 }
