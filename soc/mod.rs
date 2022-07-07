@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT or GPL-2.0
+#![allow(clippy::upper_case_acronyms)]
 
 use std::error::Error;
 use std::fmt;

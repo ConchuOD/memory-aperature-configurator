@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT or GPL-2.0
 
+#![allow(clippy::type_complexity)]
+
 use crate::soc;
 use crate::soc::SoC;
 
@@ -38,7 +40,7 @@ fn init_handler
 	return State {
 		state_id: States::WaitForInput,
 		previous_state_id: current_state.state_id,
-		command_text: format!("Enter total system memory in hex:")
+		command_text: "Enter total system memory in hex:".to_string()
 	}
 }
 
@@ -74,8 +76,7 @@ fn wait_for_input_handler
 					"Invalid amount of system memory ({}). \
 					Please enter a hex number",
 					memory_raw
-				)
-				.to_string();
+				);
 			next_state.state_id = States::WaitForInput;
 			return next_state;
 		}
@@ -91,14 +92,15 @@ fn wait_for_input_handler
 		let aperature_id_trimmed = aperature_id_raw.trim_start_matches("0x");
 		let aperature_id = u64::from_str_radix(aperature_id_trimmed, 16);
 		if aperature_id.is_err() {
-			next_state.command_text = format!("Invalid address. Please enter a hex number");
+			next_state.command_text = "Invalid address. Please enter a hex number"
+				.to_string();
 			next_state.state_id = States::SelectOperation;
 			return next_state;
 		}
 		let id = aperature_id.unwrap();
 		if id as usize >= board.memory_apertures.len() {
 			next_state.state_id = States::SelectAperature;
-			next_state.command_text = format!("Invalid aperature ID").to_string();
+			next_state.command_text = "Invalid aperature ID".to_string();
 			return next_state;
 		}
 		
@@ -113,17 +115,16 @@ fn wait_for_input_handler
 		let addr_trimmed = addr_raw.trim_start_matches("0x");
 		let addr = u64::from_str_radix(addr_trimmed, 16);
 		if addr.is_err() {
-			next_state.command_text = format!("Invalid address. Please enter a hex number");
+			next_state.command_text = "Invalid address. Please enter a hex number"
+				.to_string();
 			next_state.state_id = States::SelectOperation;
 			return next_state;
 		}
 
 		let current_aperture_id = board.current_aperture_id.unwrap();
 		if board.set_hw_start_addr_by_id(addr.unwrap(), current_aperture_id).is_err() {
-			next_state.command_text = format!(
-				"Hardware start address was greater than the total system memory. \
-				Please enter a new hex number:"
-			);
+			next_state.command_text = "Hardware start address was greater than the \
+				total system memory. Please enter a new hex number:".to_string();
 			next_state.state_id = current_state.state_id;
 			next_state.previous_state_id = States::SelectOperation;
 

@@ -11,7 +11,7 @@ use crossterm::{
 	terminal::{disable_raw_mode, enable_raw_mode},
 };
 use serde_yaml::Value;
-use std::{io, process::Output};
+use std::{io};
 use std::time::Duration;
 use std::fs;
 use tui::{
@@ -43,7 +43,7 @@ const READABLE_COLOURS: [Color; 6] =
 	Color::LightBlue
 ];
 
-fn render_table<'a, B: tui::backend::Backend>
+fn render_table<B: tui::backend::Backend>
 (data: Vec<Vec<String>>, frame:&mut Frame<B>, display_rect: Rect)
 {
 	let selected_style = Style::default().add_modifier(Modifier::REVERSED);
@@ -142,8 +142,10 @@ fn render_visualisation<B: tui::backend::Backend>
 		let aperature_start = aperature.get_hw_start_addr(board.total_system_memory);
 		let aperature_end = aperature.get_hw_end_addr(board.total_system_memory);
 		let colour = *aperature_colours.next().unwrap(); // yeah, yeah this could crash
-		let mut aperture_vis: ApertureVis = ApertureVis::default();
-		aperture_vis.label = aperature.reg_name.chars().last().clone();
+		let mut aperture_vis: ApertureVis = ApertureVis {
+			label: aperature.reg_name.chars().last(),
+			..Default::default()
+		};
 
 		let rectangle_x = mem_map_x + display_offset;
 
@@ -281,7 +283,7 @@ fn render_seg_regs<T, G, B: tui::backend::Backend>
 	let mut output;
 
 	if config_is_valid.is_ok() {
-		output = format!("seg-reg-config: {{ ").to_owned();
+		output = "seg-reg-config: { ".to_string();
 		for memory_aperture in &board.memory_apertures {
 			output += &format!(
 				"{}: {:#x?}, ",
@@ -290,9 +292,10 @@ fn render_seg_regs<T, G, B: tui::backend::Backend>
 							  memory_aperture.bus_addr)
 			).to_string();
 		}
-		output += &format!("}}\n").to_string();
+		output += "}\n";
 	} else {
-		output = format!("Cannot calculate seg registers, configuration is invalid as no memory is mapped.");
+		output = "Cannot calculate seg registers, configuration is invalid as \
+			no memory is mapped.".to_string();
 	}
 	
 	let segs =
@@ -407,9 +410,7 @@ fn handle_messages(messages: &mut Vec<String>) -> Option<String>
 
 	let message = messages.pop();
 	messages.clear();
-	if message.is_none() {
-		return None;
-	}
+	message.as_ref()?;
 
 	let input = message.as_ref().unwrap();
 	return Some(input.to_string());
