@@ -118,6 +118,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "device_tree"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f18f717c5c7c2e3483feb64cccebd077245ad6d19007c2db0fd341d38595353c"
+
+[[package]]
 name = "hashbrown"
 version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -375,6 +381,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "crossterm 0.23.2",
+ "device_tree",
  "serde",
  "serde_yaml",
  "text_io",
