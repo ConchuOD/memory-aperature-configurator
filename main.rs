@@ -11,7 +11,8 @@ use crossterm::{
 	terminal::{disable_raw_mode, enable_raw_mode},
 };
 use serde_yaml::Value;
-use std::{io};
+use std::io;
+use std::io::Read;
 use std::time::Duration;
 use std::fs;
 use tui::{
@@ -24,6 +25,8 @@ use tui::{
 	widgets::canvas::{Canvas, Rectangle},
 };
 
+mod dt;
+use crate::dt::MemoryNode;
 mod soc;
 use crate::soc::Aperture;
 mod states;
@@ -424,6 +427,10 @@ struct Args {
 	#[clap(short, long, default_value = "config.yaml")]
 	config: String,
 
+	/// input dtb
+	#[clap(short, long)]
+	dtb: Option<String>,
+
 	/// edit the config in place rather tha use the default output of "generated.yaml"
 	#[clap(short, long)]
 	in_place: bool,
@@ -439,8 +446,20 @@ fn main() -> Result<(),Box<dyn std::error::Error>> {
 	let mut messages: Vec<String> = Vec::new();
 	let input_file = args.config;
 	let mut output_file = "generated.yaml".to_string();
+	let mut memory_nodes: Option<Vec<MemoryNode>> = None;
 	if args.in_place {
 		output_file = input_file.clone();
+	}
+	
+	if args.dtb.is_some() {
+		let dtb_file = args.dtb.unwrap();
+		let mut dtb_handle = fs::File::open(dtb_file)?;
+		let mut dtb = Vec::new();
+		dtb_handle.read_to_end(&mut dtb)?;
+		let dt = device_tree::DeviceTree::load(dtb.as_slice())
+				.or(Err("bad dtb"))?;
+		let root_node = dt.root;
+		memory_nodes = Some(dt::dt_get_memory_nodes(root_node)?);
 	}
 
 	setup_segs_from_config(&mut board, input_file.clone())?;
