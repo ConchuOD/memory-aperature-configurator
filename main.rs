@@ -46,7 +46,54 @@ const READABLE_COLOURS: [Color; 6] =
 	Color::LightBlue
 ];
 
-fn render_table<B: tui::backend::Backend>
+fn render_dt_node_table<B: tui::backend::Backend>
+(nodes: Option<Vec<MemoryNode>>, frame:&mut Frame<B>, display_rect: Rect)
+{
+	let selected_style = Style::default().add_modifier(Modifier::REVERSED);
+	let header_cells = ["node name", "address", "size",]
+		.iter()
+		.map(|h|
+			return
+			Cell::from(*h)
+			.style(Style::default())
+		);
+
+	let header = Row::new(header_cells).height(1).bottom_margin(1);
+
+	if nodes.is_none() {
+		return
+	}
+
+	let data = dt::memory_nodes_to_strings(nodes.unwrap());
+
+	let rows = data.iter().map(|item| {
+		let cells = item.iter().map(|c|
+			return Cell::from(c.clone())
+		);
+		return Row::new(cells).height(1).bottom_margin(1)
+	});
+
+	let table =
+		Table::new(rows)
+		.header(header)
+		.block(
+			Block::default()
+			.borders(Borders::ALL)
+
+		)
+		.style(Style::default())
+		.highlight_style(selected_style)
+		.highlight_symbol(">> ")
+		.widths(&[
+			Constraint::Percentage(40),
+			Constraint::Percentage(30),
+			Constraint::Percentage(30),
+		]);
+
+	frame.render_widget(table, display_rect);
+}
+
+fn render_seg_table<B: tui::backend::Backend>
 (data: Vec<Vec<String>>, frame:&mut Frame<B>, display_rect: Rect)
 {
 	let selected_style = Style::default().add_modifier(Modifier::REVERSED);
@@ -313,21 +360,22 @@ fn render_seg_regs<T, G, B: tui::backend::Backend>
 }
 
 fn render_display<B: tui::backend::Backend>
-(board: &mut soc::MPFS, frame:&mut Frame<B>, display_rect: Rect)
+(board: &mut soc::MPFS, memory_nodes: Option<Vec<MemoryNode>>,
+ frame: &mut Frame<B>, display_rect: Rect)
 {
 	let chunks =
 		Layout::default()
 		.direction(Direction::Vertical)
 		.constraints(
 		[
-			Constraint::Percentage(85),
-			Constraint::Percentage(15),
+			Constraint::Percentage(90),
+			Constraint::Percentage(10),
 		]
 		.as_ref(),
 		)
 		.split(display_rect);
 
-	let display_area = 
+	let display_area =
 		Layout::default()
 		.direction(Direction::Horizontal)
 		.constraints(
@@ -339,11 +387,24 @@ fn render_display<B: tui::backend::Backend>
 		)
 		.split(chunks[0]);
 
+	let table_area =
+		Layout::default()
+		.direction(Direction::Vertical)
+		.constraints(
+		[
+			Constraint::Percentage(60),
+			Constraint::Percentage(40),
+		]
+		.as_ref(),
+		)
+		.split(display_area[1]);
+
 	let (data, config_is_valid) = format_table_data(board);
 
 	render_seg_regs(board, config_is_valid, frame, chunks[1]);
 
-	render_table(data, frame, display_area[1]);
+	render_seg_table(data, frame, table_area[0]);
+	render_dt_node_table(memory_nodes, frame, table_area[1]);
 
 	render_visualisation(board, frame, display_area[0]);
 }
@@ -459,7 +520,7 @@ fn main() -> Result<(),Box<dyn std::error::Error>> {
 		let dt = device_tree::DeviceTree::load(dtb.as_slice())
 				.or(Err("bad dtb"))?;
 		let root_node = dt.root;
-		memory_nodes = Some(dt::dt_get_memory_nodes(root_node)?);
+		memory_nodes = Some(dt::get_memory_nodes(root_node)?);
 	}
 
 	setup_segs_from_config(&mut board, input_file.clone())?;
@@ -476,14 +537,14 @@ fn main() -> Result<(),Box<dyn std::error::Error>> {
 				.direction(Direction::Vertical)
 				.constraints(
 				[
-					Constraint::Percentage(85),
-					Constraint::Percentage(15),
+					Constraint::Percentage(90),
+					Constraint::Percentage(10),
 				]
 				.as_ref(),
 				)
 				.split(frame.size());
 			
-			render_display(&mut board, frame, entire_window[0]);
+			render_display(&mut board, memory_nodes.clone(), frame, entire_window[0]);
 
 			let txt = format!("{}\n{}", command_text, input);
 			

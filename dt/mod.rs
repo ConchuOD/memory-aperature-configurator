@@ -9,12 +9,31 @@ use device_tree;
 
 #[derive(Clone, Debug)]
 pub struct MemoryNode {
-	address: u64,
-	size: u64,
-	label: String,
+	pub address: u64,
+	pub size: u64,
+	pub label: String,
 }
 
-pub fn dt_get_memory_nodes(root_node: device_tree::Node)
+fn memory_node_to_string(node: MemoryNode) -> Vec<String>
+{
+	let mut strings = Vec::new();
+	strings.push(node.label);
+	strings.push(format!("{:#12x}", node.address).to_string());
+	strings.push(format!("{:#12x}", node.size).to_string());
+	return strings.clone()
+}
+
+pub fn memory_nodes_to_strings(nodes: Vec<MemoryNode>) -> Vec<Vec<String>>
+{
+	//I'm sure this should be a closure or w/e
+	let mut strings = Vec::new();
+	for node in nodes {
+		strings.push(memory_node_to_string(node));
+	}
+	return strings.clone()
+}
+
+pub fn get_memory_nodes(root_node: device_tree::Node)
 -> Result<Vec<MemoryNode>, Box<dyn std::error::Error>>
 {
 	//TODO: parse size/address cells
