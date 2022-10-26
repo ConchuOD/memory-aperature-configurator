@@ -233,7 +233,6 @@ fn render_visualisation<B: tui::backend::Backend>
 
 			let colour = *node_colours.next().unwrap(); // yeah, yeah this could crash
 
-
 			let start_addr = start_addr.unwrap();
 
 			let mut node_vis = ApertureVis {
@@ -242,9 +241,8 @@ fn render_visualisation<B: tui::backend::Backend>
 			};
 
 			let rectangle_x = mem_map_x + display_offset;
-
 			let node_y: f64 = px_per_byte * start_addr as f64;
-			let node_height: f64 = px_per_byte * (node.size as f64 - 1.0) - node_y;
+			let node_height: f64 = px_per_byte * (node.size as f64 - 1.0);
 			let rectangle_y = mem_map_y + node_y;
 
 			let rectangle = Rectangle {
@@ -303,6 +301,13 @@ fn render_visualisation<B: tui::backend::Backend>
 					mem_map_x + mem_map_width + 1.25,
 					mem_map_y - 0.5,
 					Span::styled(format!("{:#010x?}", 0_u64),
+					Style::default()),
+				);
+				ctx.print(
+					mem_map_x + mem_map_width + 1.25,
+					mem_map_y + mem_map_height / 2.0,
+					Span::styled(format!("{:#010x?}",
+							     board.total_system_memory / 2),
 					Style::default()),
 				);
 				ctx.print(
