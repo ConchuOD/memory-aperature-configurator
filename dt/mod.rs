@@ -33,16 +33,16 @@ impl NoGoodNameYet for MemoryNode {
 		let hw_address = self.get_hw_start_addr(&mut board.memory_apertures);
 
 		strings.push(self.label.clone());
-		strings.push(format!("{:#12x}", self.address).to_string());
-		strings.push(format!("{:#12x}", self.size).to_string());
+		strings.push(format!("{:#012x}", self.address).to_string());
+		strings.push(format!("{:#012x}", self.size).to_string());
 		
 		if hw_address.is_err() {
-			strings.push(format!("{:#12x}", 0).to_string());
-			strings.push(format!("{:#12x}", 0).to_string());
+			strings.push(format!("{:#012x}", 0).to_string());
+			strings.push(format!("{:#012x}", 0).to_string());
 		} else {
 			let hw_address = hw_address.unwrap();
-			strings.push(format!("{:#12x}", hw_address).to_string());
-			strings.push(format!("{:#12x}", hw_address + self.size - 1).to_string());
+			strings.push(format!("{:#012x}", hw_address).to_string());
+			strings.push(format!("{:#012x}", hw_address + self.size - 1).to_string());
 		}
 
 		return strings.clone()
