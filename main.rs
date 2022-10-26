@@ -223,10 +223,10 @@ fn render_visualisation<B: tui::backend::Backend>
 		display_offset += aperature_width + aperature_width / num_apertures;
 	}
 
-	if nodes.is_some() {
+	if let Some(nodes) = nodes {
 		let mut node_colours = READABLE_COLOURS.iter();
 		let mut label: Option<char> = Some('a');
-		for node in nodes.unwrap().iter() {
+		for node in nodes.iter() {
 			let start_addr = node.get_hw_start_addr(&mut board.memory_apertures.clone());
 			if start_addr.is_err() {
 				break;
@@ -562,8 +562,7 @@ fn main() -> Result<(),Box<dyn std::error::Error>> {
 		output_file = input_file.clone();
 	}
 
-	if args.dtb.is_some() {
-		let dtb_file = args.dtb.unwrap();
+	if let Some(dtb_file) = args.dtb {
 		let mut dtb_handle = fs::File::open(dtb_file)?;
 		let mut dtb = Vec::new();
 		dtb_handle.read_to_end(&mut dtb)?;

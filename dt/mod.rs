@@ -5,8 +5,6 @@
 #![deny(clippy::implicit_return)]
 #![allow(clippy::needless_return)]
 
-use device_tree;
-
 use crate::soc::Aperture;
 use crate::soc::MemoryAperture;
 use crate::soc::MPFS;
