@@ -9,6 +9,7 @@ use device_tree;
 
 use crate::soc::Aperture;
 use crate::soc::MemoryAperture;
+use crate::soc::MPFS;
 use crate::soc::SegError;
 
 #[derive(Clone, Debug)]
@@ -19,19 +20,31 @@ pub struct MemoryNode {
 }
 
 pub trait NoGoodNameYet {
-	fn to_strings(&self) -> Vec<String>;
+	fn to_strings(&self, board: &mut MPFS) -> Vec<String>;
 
 	fn get_hw_start_addr
 	(&self, apertures: &mut Vec<MemoryAperture>) -> Result<u64, SegError>;
 }
 
 impl NoGoodNameYet for MemoryNode {
-	fn to_strings(&self) -> Vec<String>
+	fn to_strings(&self, board: &mut MPFS) -> Vec<String>
 	{
 		let mut strings = Vec::new();
+		let hw_address = self.get_hw_start_addr(&mut board.memory_apertures);
+
 		strings.push(self.label.clone());
 		strings.push(format!("{:#12x}", self.address).to_string());
 		strings.push(format!("{:#12x}", self.size).to_string());
+		
+		if hw_address.is_err() {
+			strings.push(format!("{:#12x}", 0).to_string());
+			strings.push(format!("{:#12x}", 0).to_string());
+		} else {
+			let hw_address = hw_address.unwrap();
+			strings.push(format!("{:#12x}", hw_address).to_string());
+			strings.push(format!("{:#12x}", hw_address + self.size - 1).to_string());
+		}
+
 		return strings.clone()
 	}
 
@@ -55,12 +68,12 @@ impl NoGoodNameYet for MemoryNode {
 
 }
 
-pub fn memory_nodes_to_strings(nodes: Vec<MemoryNode>) -> Vec<Vec<String>>
+pub fn memory_nodes_to_strings(board: &mut MPFS, nodes: Vec<MemoryNode>) -> Vec<Vec<String>>
 {
 	//I'm sure this should be a closure or w/e
 	let mut strings = Vec::new();
 	for node in nodes {
-		strings.push(node.to_strings());
+		strings.push(node.to_strings(board));
 	}
 	return strings.clone()
 }

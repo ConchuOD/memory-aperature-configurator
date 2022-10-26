@@ -48,10 +48,10 @@ const READABLE_COLOURS: [Color; 6] =
 ];
 
 fn render_dt_node_table<B: tui::backend::Backend>
-(nodes: Option<Vec<MemoryNode>>, frame:&mut Frame<B>, display_rect: Rect)
+(board: &mut soc::MPFS, nodes: Option<Vec<MemoryNode>>, frame:&mut Frame<B>, display_rect: Rect)
 {
 	let selected_style = Style::default().add_modifier(Modifier::REVERSED);
-	let header_cells = ["node name", "address", "size",]
+	let header_cells = ["node name", "address", "size", "hw start", "hw end",]
 		.iter()
 		.map(|h|
 			return
@@ -65,7 +65,7 @@ fn render_dt_node_table<B: tui::backend::Backend>
 		return
 	}
 
-	let data = dt::memory_nodes_to_strings(nodes.unwrap());
+	let data = dt::memory_nodes_to_strings(board, nodes.unwrap());
 
 	let rows = data.iter().map(|item| {
 		let cells = item.iter().map(|c|
@@ -86,9 +86,11 @@ fn render_dt_node_table<B: tui::backend::Backend>
 		.highlight_style(selected_style)
 		.highlight_symbol(">> ")
 		.widths(&[
-			Constraint::Percentage(40),
-			Constraint::Percentage(30),
-			Constraint::Percentage(30),
+			Constraint::Percentage(20),
+			Constraint::Percentage(20),
+			Constraint::Percentage(20),
+			Constraint::Percentage(20),
+			Constraint::Percentage(20),
 		]);
 
 	frame.render_widget(table, display_rect);
@@ -443,7 +445,7 @@ fn render_display<B: tui::backend::Backend>
 	render_seg_regs(board, config_is_valid, frame, chunks[1]);
 
 	render_seg_table(data, frame, table_area[0]);
-	render_dt_node_table(memory_nodes.clone(), frame, table_area[1]);
+	render_dt_node_table(board, memory_nodes.clone(), frame, table_area[1]);
 
 	render_visualisation(board, memory_nodes, frame, display_area[0]);
 }
