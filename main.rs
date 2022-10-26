@@ -236,7 +236,7 @@ fn render_visualisation<B: tui::backend::Backend>
 			let start_addr = start_addr.unwrap();
 
 			let mut node_vis = ApertureVis {
-				label: "c".chars().last(),
+				label: None,
 				..Default::default()
 			};
 
