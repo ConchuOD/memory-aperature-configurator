@@ -7,6 +7,10 @@
 
 use device_tree;
 
+use crate::soc::Aperture;
+use crate::soc::MemoryAperture;
+use crate::soc::SegError;
+
 #[derive(Clone, Debug)]
 pub struct MemoryNode {
 	pub address: u64,
@@ -14,13 +18,41 @@ pub struct MemoryNode {
 	pub label: String,
 }
 
-fn memory_node_to_string(node: MemoryNode) -> Vec<String>
-{
-	let mut strings = Vec::new();
-	strings.push(node.label);
-	strings.push(format!("{:#12x}", node.address).to_string());
-	strings.push(format!("{:#12x}", node.size).to_string());
-	return strings.clone()
+pub trait NoGoodNameYet {
+	fn to_strings(&self) -> Vec<String>;
+
+	fn get_hw_start_addr
+	(&self, apertures: &mut Vec<MemoryAperture>) -> Result<u64, SegError>;
+}
+
+impl NoGoodNameYet for MemoryNode {
+	fn to_strings(&self) -> Vec<String>
+	{
+		let mut strings = Vec::new();
+		strings.push(self.label.clone());
+		strings.push(format!("{:#12x}", self.address).to_string());
+		strings.push(format!("{:#12x}", self.size).to_string());
+		return strings.clone()
+	}
+
+	fn get_hw_start_addr
+	(&self, apertures: &mut Vec<MemoryAperture>) -> Result<u64, SegError>
+	{
+		for aperture in apertures.iter_mut() {
+			let hw_start_addr = aperture.get_region_hw_start_addr(self.address,
+									      self.size);
+			if hw_start_addr.is_none() {
+				continue
+			}
+
+			return Ok(hw_start_addr.unwrap())
+		}
+
+		dbg!("no overlapping region found for {:?} {:?}", apertures, self);
+
+		return Err(SegError {})
+	}
+
 }
 
 pub fn memory_nodes_to_strings(nodes: Vec<MemoryNode>) -> Vec<Vec<String>>
@@ -28,7 +60,7 @@ pub fn memory_nodes_to_strings(nodes: Vec<MemoryNode>) -> Vec<Vec<String>>
 	//I'm sure this should be a closure or w/e
 	let mut strings = Vec::new();
 	for node in nodes {
-		strings.push(memory_node_to_string(node));
+		strings.push(node.to_strings());
 	}
 	return strings.clone()
 }

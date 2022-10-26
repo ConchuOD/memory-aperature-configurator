@@ -27,6 +27,7 @@ use tui::{
 
 mod dt;
 use crate::dt::MemoryNode;
+use crate::dt::NoGoodNameYet;
 mod soc;
 use crate::soc::Aperture;
 mod states;
@@ -102,7 +103,6 @@ fn render_seg_table<B: tui::backend::Backend>
 			"ID", "Register Name", "Description", "Bus Address",
 			"Register Value", "Aperture HW Start", "Aperture HW End",
 			"Aperature Size",
-			
 		 ]
 		.iter()
 		.map(|h|
@@ -164,7 +164,7 @@ impl Default for ApertureVis {
 }
 
 fn render_visualisation<B: tui::backend::Backend>
-(board: &mut soc::MPFS, frame:&mut Frame<B>, display_rect: Rect)
+(board: &mut soc::MPFS, nodes: Option<Vec<MemoryNode>>, frame:&mut Frame<B>, display_rect: Rect)
 {
 	let border: f64 = 0.5;
 	let mem_map_height: f64 = (display_rect.height) as f64 - 2.0 * border;
@@ -185,9 +185,11 @@ fn render_visualisation<B: tui::backend::Backend>
 
 	let memory_apertures = board.memory_apertures.iter();
 	let mut apertures: Vec<ApertureVis> = Vec::new();
-	let num_apertures = 6.0;
+	let num_apertures = 6.0; // this is a fixed property of the SoC
+	let num_apertures = 7.0; // inc. by one for the dt node rendering
 	let aperature_width = mem_map_width / (num_apertures + 1.0);
 	let mut display_offset = aperature_width / num_apertures;
+
 	for aperature in memory_apertures {
 		let aperature_start = aperature.get_hw_start_addr(board.total_system_memory);
 		let aperature_end = aperature.get_hw_end_addr(board.total_system_memory);
@@ -219,6 +221,43 @@ fn render_visualisation<B: tui::backend::Backend>
 		display_offset += aperature_width + aperature_width / num_apertures;
 	}
 
+	if nodes.is_some() {
+		let mut node_colours = READABLE_COLOURS.iter();
+		for node in nodes.unwrap().iter() {
+			let start_addr = node.get_hw_start_addr(&mut board.memory_apertures.clone());
+			if start_addr.is_err() {
+				break;
+			}
+
+			let colour = *node_colours.next().unwrap(); // yeah, yeah this could crash
+
+
+			let start_addr = start_addr.unwrap();
+
+			let mut node_vis = ApertureVis {
+				label: "c".chars().last(),
+				..Default::default()
+			};
+
+			let rectangle_x = mem_map_x + display_offset;
+
+			let node_y: f64 = px_per_byte * start_addr as f64;
+			let node_height: f64 = px_per_byte * (node.size as f64 - 1.0) - node_y;
+			let rectangle_y = mem_map_y + node_y;
+
+			let rectangle = Rectangle {
+				x: rectangle_x,
+				y: rectangle_y,
+				width: aperature_width,
+				height: node_height,
+				color: colour,
+			};
+
+			node_vis.rectangle = Some(rectangle);
+			apertures.push(node_vis.clone());
+		}
+	}
+
 	let canvas =
 		Canvas::default()
 		.block(
@@ -235,20 +274,21 @@ fn render_visualisation<B: tui::backend::Backend>
 				ctx.draw(&memory_map);
 
 				for aperture in &apertures {
-					if aperture.label.is_none(){
-						continue;
-					}
 
-					ctx.print(
-						aperture.label_x,
-						aperture.label_y,
-						Span::styled(
-							format!("{}",
-								aperture.label.as_ref().unwrap()
-							),
-							Style::default()
-						)
-					);
+					if aperture.label.is_some() {
+						ctx.print(
+							aperture.label_x,
+							aperture.label_y,
+							Span::styled(
+								format!("{}",
+									aperture.label
+										.as_ref()
+										.unwrap()
+								),
+								Style::default()
+							)
+						);
+					}
 
 					if aperture.rectangle.is_none() {
 						continue;
@@ -287,7 +327,6 @@ fn format_table_data(board: &mut soc::MPFS) -> (Vec<Vec<String>>, Result<(), ()>
 		let aperature_start = memory_aperture.get_hw_start_addr(board.total_system_memory);
 		let aperature_end = memory_aperture.get_hw_end_addr(board.total_system_memory);
 
-	
 		let mut row_cells: Vec<String> = Vec::new();
 		row_cells.push(data.len().to_string());
 		row_cells.push(memory_aperture.reg_name.clone());
@@ -347,7 +386,7 @@ fn render_seg_regs<T, G, B: tui::backend::Backend>
 		output = "Cannot calculate seg registers, configuration is invalid as \
 			no memory is mapped.".to_string();
 	}
-	
+
 	let segs =
 		Paragraph::new(output)
 		.block(
@@ -404,9 +443,9 @@ fn render_display<B: tui::backend::Backend>
 	render_seg_regs(board, config_is_valid, frame, chunks[1]);
 
 	render_seg_table(data, frame, table_area[0]);
-	render_dt_node_table(memory_nodes, frame, table_area[1]);
+	render_dt_node_table(memory_nodes.clone(), frame, table_area[1]);
 
-	render_visualisation(board, frame, display_area[0]);
+	render_visualisation(board, memory_nodes, frame, display_area[0]);
 }
 
 fn setup_segs_from_config(board: &mut soc::MPFS, input_file: String)
@@ -450,7 +489,7 @@ fn save_segs_to_config(board: &mut soc::MPFS, input_file: String, output_file: S
 	let mut d: Value = serde_yaml::from_str(&contents.unwrap())?;
 
 	for memory_aperture in &board.memory_apertures {
-		let seg_value = 
+		let seg_value =
 			format!("{:#x?}",
 				 soc::hw_start_addr_to_seg(memory_aperture.hardware_addr,
 							   memory_aperture.bus_addr)
@@ -511,7 +550,7 @@ fn main() -> Result<(),Box<dyn std::error::Error>> {
 	if args.in_place {
 		output_file = input_file.clone();
 	}
-	
+
 	if args.dtb.is_some() {
 		let dtb_file = args.dtb.unwrap();
 		let mut dtb_handle = fs::File::open(dtb_file)?;
@@ -543,11 +582,11 @@ fn main() -> Result<(),Box<dyn std::error::Error>> {
 				.as_ref(),
 				)
 				.split(frame.size());
-			
+
 			render_display(&mut board, memory_nodes.clone(), frame, entire_window[0]);
 
 			let txt = format!("{}\n{}", command_text, input);
-			
+
 			let graph =
 				Paragraph::new(txt)
 				.block(

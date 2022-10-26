@@ -22,16 +22,26 @@ impl Error for SegError {
 pub trait Aperture {
 	fn get_hw_start_addr
 	(&self, total_system_memory: u64) -> Result<u64, SegError>;
+
 	fn get_hw_end_addr
 	(&self, total_system_memory: u64) -> Result<u64, SegError>;
+
 	fn set_hw_start_addr
 	(&mut self, total_system_memory: u64, new_start_addr: u64) -> Result<(), SegError>;
+
 	fn set_hw_start_addr_from_seg
 	(&mut self, total_system_memory: u64, seg_value: u64) -> Result<(), SegError>;
+
+	fn check_region_in_aperture
+	(&mut self, region_start: u64, region_size: u64) -> bool;
+
+	fn get_region_hw_start_addr
+	(&mut self, region_start: u64, region_size: u64) -> Option<u64>;
 }
 
 #[derive(Debug)]
 pub struct MemoryApertureError;
+#[derive(Debug, Clone)]
 pub struct MemoryAperture {
 	pub description: String,
 	pub bus_addr: u64,
@@ -44,7 +54,7 @@ impl Aperture for MemoryAperture {
 
 	fn get_hw_start_addr(&self, total_system_memory: u64) -> Result<u64, SegError>
 	{
-		if self.hardware_addr > total_system_memory{
+		if self.hardware_addr > total_system_memory {
 			return Err(SegError {})
 		}
 		return Ok(self.hardware_addr)
@@ -52,9 +62,9 @@ impl Aperture for MemoryAperture {
 
 	fn get_hw_end_addr(&self, total_system_memory: u64) -> Result<u64, SegError>
 	{
-	// the last hardware addr decided by whichever is lower:
-	// - the addr of the "highest" physical memory on the system
-	// - the and of the aperture into memory on this part of the bus
+		// the last hardware addr decided by whichever is lower:
+		// - the addr of the "highest" physical memory on the system
+		// - the and of the aperture into memory on this part of the bus
 
 		let aperture_max = self.hardware_addr + self.aperture_size;
 		if aperture_max > total_system_memory {
@@ -74,11 +84,35 @@ impl Aperture for MemoryAperture {
 			return Err(SegError {})
 		}
 	}
+
 	fn set_hw_start_addr_from_seg
 	(&mut self, total_system_memory: u64, seg_value: u64) -> Result<(), SegError>
 	{
 		let new_start_addr = seg_to_hw_start_addr(seg_value, self.bus_addr);
 		return self.set_hw_start_addr(total_system_memory, new_start_addr)
+	}
+
+	fn check_region_in_aperture
+	(&mut self, region_start: u64, region_size: u64) -> bool
+	{
+		if region_start >= self.bus_addr &&
+		   region_start < (self.bus_addr + self.aperture_size) {
+			return true;
+		}
+
+		return false
+	}
+
+	fn get_region_hw_start_addr
+	(&mut self, region_start: u64, region_size: u64) -> Option<u64>
+	{
+		if !self.check_region_in_aperture(region_start, region_size) {
+			return None
+		}
+
+		let offset = region_start - self.bus_addr;
+
+		return Some(self.hardware_addr + offset)
 	}
 }
 
@@ -136,7 +170,7 @@ impl Default for MPFS {
 					description: "64-bit cached\t".to_string(),
 					reg_name: "seg0_1".to_string(),
 					bus_addr: 0x10_0000_0000,
-					hardware_addr: 0x00_0200_0000,
+					hardware_addr: 0x0,
 					aperture_size: 0x40_0000_0000,
 				},
 				MemoryAperture {
