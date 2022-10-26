@@ -5,7 +5,6 @@
 #![deny(clippy::implicit_return)]
 #![allow(clippy::needless_return)]
 
-use device_tree;
 use std::io::Read;
 use std::fs;
 
@@ -35,16 +34,16 @@ impl NoGoodNameYet for MemoryNode {
 		let hw_address = self.get_hw_start_addr(&mut board.memory_apertures);
 
 		strings.push(self.label.clone());
-		strings.push(format!("{:#012x}", self.address).to_string());
-		strings.push(format!("{:#012x}", self.size).to_string());
-		
-		if hw_address.is_err() {
-			strings.push(format!("{:#012x}", 0).to_string());
-			strings.push(format!("{:#012x}", 0).to_string());
+		strings.push(format!("{:#012x}", self.address));
+		strings.push(format!("{:#012x}", self.size));
+
+		if let Ok(hw_address) = hw_address {
+			strings.push(format!("{:#012x}", 0));
+			strings.push(format!("{:#012x}", 0));
 		} else {
 			let hw_address = hw_address.unwrap();
-			strings.push(format!("{:#012x}", hw_address).to_string());
-			strings.push(format!("{:#012x}", hw_address + self.size - 1).to_string());
+			strings.push(format!("{:#012x}", hw_address));
+			strings.push(format!("{:#012x}", hw_address + self.size - 1));
 		}
 
 		return strings.clone()
@@ -105,7 +104,7 @@ fn get_memory_nodes(root_node: device_tree::Node)
 			let node = MemoryNode {
 				label: child.name.clone(),
 				address: addr,
-				size: size,
+				size,
 			};
 			memory_nodes.push(node);
 		}
