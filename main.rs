@@ -15,7 +15,7 @@ use std::io;
 use std::time::Duration;
 use std::fs;
 use tui::{
-	backend::{CrosstermBackend},
+	backend::CrosstermBackend,
 	Frame,
 	layout::{Constraint, Direction, Layout, Rect},
 	style::{Color, Modifier, Style},
