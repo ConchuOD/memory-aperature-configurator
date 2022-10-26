@@ -5,6 +5,10 @@
 #![deny(clippy::implicit_return)]
 #![allow(clippy::needless_return)]
 
+use device_tree;
+use std::io::Read;
+use std::fs;
+
 use crate::soc::Aperture;
 use crate::soc::MemoryAperture;
 use crate::soc::MPFS;
@@ -76,7 +80,7 @@ pub fn memory_nodes_to_strings(board: &mut MPFS, nodes: Vec<MemoryNode>) -> Vec<
 	return strings.clone()
 }
 
-pub fn get_memory_nodes(root_node: device_tree::Node)
+fn get_memory_nodes(root_node: device_tree::Node)
 -> Result<Vec<MemoryNode>, Box<dyn std::error::Error>>
 {
 	//TODO: parse size/address cells
@@ -109,3 +113,16 @@ pub fn get_memory_nodes(root_node: device_tree::Node)
 	println!("{:?}", memory_nodes);
 	return Ok(memory_nodes.clone())
 }
+
+pub fn dtb_get_memory_nodes(dtb_file: String)
+-> Result<Option<Vec<MemoryNode>>, Box<dyn std::error::Error>>
+{
+	let mut dtb_handle = fs::File::open(dtb_file)?;
+	let mut dtb = Vec::new();
+	dtb_handle.read_to_end(&mut dtb)?;
+	let dt = device_tree::DeviceTree::load(dtb.as_slice())
+			.or(Err("bad dtb"))?;
+	let root_node = dt.root;
+	return Ok(Some(get_memory_nodes(root_node)?));
+}
+

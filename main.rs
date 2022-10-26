@@ -12,7 +12,6 @@ use crossterm::{
 };
 use serde_yaml::Value;
 use std::io;
-use std::io::Read;
 use std::time::Duration;
 use std::fs;
 use tui::{
@@ -563,13 +562,7 @@ fn main() -> Result<(),Box<dyn std::error::Error>> {
 	}
 
 	if let Some(dtb_file) = args.dtb {
-		let mut dtb_handle = fs::File::open(dtb_file)?;
-		let mut dtb = Vec::new();
-		dtb_handle.read_to_end(&mut dtb)?;
-		let dt = device_tree::DeviceTree::load(dtb.as_slice())
-				.or(Err("bad dtb"))?;
-		let root_node = dt.root;
-		memory_nodes = Some(dt::get_memory_nodes(root_node)?);
+		memory_nodes = dt::dtb_get_memory_nodes(dtb_file)?;
 	}
 
 	setup_segs_from_config(&mut board, input_file.clone())?;
