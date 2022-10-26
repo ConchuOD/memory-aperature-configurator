@@ -225,6 +225,7 @@ fn render_visualisation<B: tui::backend::Backend>
 
 	if nodes.is_some() {
 		let mut node_colours = READABLE_COLOURS.iter();
+		let mut label: Option<char> = Some('a');
 		for node in nodes.unwrap().iter() {
 			let start_addr = node.get_hw_start_addr(&mut board.memory_apertures.clone());
 			if start_addr.is_err() {
@@ -236,15 +237,18 @@ fn render_visualisation<B: tui::backend::Backend>
 			let start_addr = start_addr.unwrap();
 
 			let mut node_vis = ApertureVis {
-				label: None,
+				label,
 				..Default::default()
 			};
+			label = char::from_u32(label.unwrap() as u32 + 1);
 
 			let rectangle_x = mem_map_x + display_offset;
 			let node_y: f64 = px_per_byte * start_addr as f64;
 			let node_height: f64 = px_per_byte * (node.size as f64 - 1.0);
 			let rectangle_y = mem_map_y + node_y;
 
+			node_vis.label_x = rectangle_x + 0.5 * aperature_width;
+			node_vis.label_y = rectangle_y + node_height / 2.0 - 0.5;
 			let rectangle = Rectangle {
 				x: rectangle_x,
 				y: rectangle_y,
