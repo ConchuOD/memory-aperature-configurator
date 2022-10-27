@@ -50,7 +50,7 @@ fn render_dt_node_table<B: tui::backend::Backend>
 (board: &mut soc::MPFS, nodes: Option<Vec<MemoryNode>>, frame:&mut Frame<B>, display_rect: Rect)
 {
 	let selected_style = Style::default().add_modifier(Modifier::REVERSED);
-	let header_cells = ["Node Name", "Address", "Size", "HW Start", "HW End",]
+	let header_cells = ["ID", "Node Name", "Address", "Size", "HW Start", "HW End",]
 		.iter()
 		.map(|h|
 			return
@@ -64,9 +64,21 @@ fn render_dt_node_table<B: tui::backend::Backend>
 		return
 	}
 
-	let data = dt::memory_nodes_to_strings(board, nodes.unwrap());
+	let mut data = dt::memory_nodes_to_strings(board, nodes.unwrap());
 
-	let rows = data.iter().map(|item| {
+	let mut labeled_data: Vec<Vec<String>> = Vec::new();
+	let mut label: Option<char> = Some('a');
+	for node in data.iter_mut() {
+		let mut labeled_node: Vec<String> = Vec::new();
+		labeled_node.push(label.unwrap().to_string());
+		labeled_node.append(node);
+		labeled_data.push(labeled_node);
+
+		label = char::from_u32(label.unwrap() as u32 + 1);
+	}
+
+
+	let rows = labeled_data.iter().map(|item| {
 		let cells = item.iter().map(|c|
 			return Cell::from(c.clone())
 		);
@@ -85,11 +97,12 @@ fn render_dt_node_table<B: tui::backend::Backend>
 		.highlight_style(selected_style)
 		.highlight_symbol(">> ")
 		.widths(&[
-			Constraint::Percentage(20),
-			Constraint::Percentage(20),
-			Constraint::Percentage(20),
-			Constraint::Percentage(20),
-			Constraint::Percentage(20),
+			Constraint::Percentage(5),
+			Constraint::Percentage(19),
+			Constraint::Percentage(19),
+			Constraint::Percentage(19),
+			Constraint::Percentage(19),
+			Constraint::Percentage(19),
 		]);
 
 	frame.render_widget(table, display_rect);
