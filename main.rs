@@ -50,7 +50,7 @@ fn render_dt_node_table<B: tui::backend::Backend>
 (board: &mut soc::MPFS, nodes: Option<Vec<MemoryNode>>, frame:&mut Frame<B>, display_rect: Rect)
 {
 	let selected_style = Style::default().add_modifier(Modifier::REVERSED);
-	let header_cells = ["node name", "address", "size", "hw start", "hw end",]
+	let header_cells = ["Node Name", "Address", "Size", "HW Start", "HW End",]
 		.iter()
 		.map(|h|
 			return
