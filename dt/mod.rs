@@ -38,12 +38,11 @@ impl NoGoodNameYet for MemoryNode {
 		strings.push(format!("{:#012x}", self.size));
 
 		if let Ok(hw_address) = hw_address {
-			strings.push(format!("{:#012x}", 0));
-			strings.push(format!("{:#012x}", 0));
-		} else {
-			let hw_address = hw_address.unwrap();
 			strings.push(format!("{:#012x}", hw_address));
 			strings.push(format!("{:#012x}", hw_address + self.size - 1));
+		} else {
+			strings.push(format!("{:#012x}", 0));
+			strings.push(format!("{:#012x}", 0));
 		}
 
 		return strings.clone()
